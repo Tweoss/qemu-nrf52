@@ -15,6 +15,7 @@
 #include "qemu/osdep.h"
 #include "qemu/log.h"
 #include "qemu/module.h"
+#include "exec/address-spaces.h"
 #include "hw/char/nrf51_uart.h"
 #include "hw/irq.h"
 #include "hw/qdev-properties.h"
@@ -34,6 +35,8 @@ static void nrf51_uart_update_irq(NRF51UARTState *s)
             (s->reg[R_UART_INTEN] & R_UART_INTEN_ERROR_MASK));
     irq |= (s->reg[R_UART_RXTO]   &&
             (s->reg[R_UART_INTEN] & R_UART_INTEN_RXTO_MASK));
+    irq |= (s->reg[R_UART_ENDTX]   &&
+            (s->reg[R_UART_INTEN] & R_UART_INTEN_ENDTX_MASK));
 
     qemu_set_irq(s->irq, irq);
 }
@@ -78,25 +81,49 @@ static uint64_t uart_read(void *opaque, hwaddr addr, unsigned int size)
 static gboolean uart_transmit(void *do_not_use, GIOCondition cond, void *opaque)
 {
     NRF51UARTState *s = NRF51_UART(opaque);
-    int r;
+    int r = 0;
     uint8_t c = s->reg[R_UART_TXD];
 
     s->watch_tag = 0;
 
-    r = qemu_chr_fe_write(&s->chr, &c, 1);
-    if (r <= 0) {
-        s->watch_tag = qemu_chr_fe_add_watch(&s->chr, G_IO_OUT | G_IO_HUP,
-                                             uart_transmit, s);
-        if (!s->watch_tag) {
-            /* The hardware has no transmit error reporting,
-             * so silently drop the byte
-             */
-            goto buffer_drained;
+    //info_report("nrf52832.uart0: bytes sending: %u", s->reg[R_UART_TXD_CNT]);
+
+    if (s->reg[R_UART_TXD_CNT]) {
+
+        MemTxResult result = address_space_rw(&s->downstream_as,
+                                              s->reg[R_UART_TXD_PTR],
+                                              MEMTXATTRS_UNSPECIFIED,
+                                              s->tx_dma,
+                                              s->reg[R_UART_TXD_CNT],
+                                              false);
+        if (!result) {
+            r = qemu_chr_fe_write_all(&s->chr, s->tx_dma, s->reg[R_UART_TXD_CNT]);
+            //info_report("nrf52832.uart0: bytes sent: %d", r);
+        } else {
+            error_report("nrf52832.uart0: address_space_rw error: %d", result);
         }
-        return FALSE;
+        goto buffer_drained;
+
+    } else {
+        r = qemu_chr_fe_write(&s->chr, &c, 1);
+
+        if (r <= 0) {
+            s->watch_tag = qemu_chr_fe_add_watch(&s->chr, G_IO_OUT | G_IO_HUP,
+                                                 uart_transmit, s);
+            if (!s->watch_tag) {
+                /* The hardware has no transmit error reporting,
+                 * so silently drop the byte
+                 */
+                goto buffer_drained;
+            }
+            return FALSE;
+        }
     }
 
 buffer_drained:
+    s->reg[R_UART_TXD_CNT] = 0;
+    s->reg[R_UART_ENDTX] = 1;
+    s->reg[R_UART_TXDRDY] = 1;
     s->reg[R_UART_TXDRDY] = 1;
     s->pending_tx_byte = false;
     return FALSE;
@@ -116,14 +143,14 @@ static void uart_write(void *opaque, hwaddr addr,
     NRF51UARTState *s = NRF51_UART(opaque);
 
     trace_nrf51_uart_write(addr, value, size);
-
+    //info_report("nrf52832.uart0: uart_write %08lX %lu", addr, value);
     if (!s->enabled && (addr != A_UART_ENABLE)) {
         return;
     }
 
     switch (addr) {
     case A_UART_TXD:
-        if (!s->pending_tx_byte && s->tx_started) {
+        if (!s->pending_tx_byte && s->reg[R_UART_TXSTARTED]) {
             s->reg[R_UART_TXD] = value;
             s->pending_tx_byte = true;
             uart_transmit(NULL, G_IO_OUT, s);
@@ -153,7 +180,8 @@ static void uart_write(void *opaque, hwaddr addr,
         break;
     case A_UART_STARTTX:
         if (value == 1) {
-            s->tx_started = true;
+            s->reg[R_UART_TXSTARTED] = 1;
+            uart_transmit(NULL, G_IO_OUT, s); // easy DMA start
         }
         break;
     case A_UART_STARTRX:
@@ -162,10 +190,9 @@ static void uart_write(void *opaque, hwaddr addr,
         }
         break;
     case A_UART_ENABLE:
+        //info_report("nrf52832.uart0: A_UART_ENABLE %lu", value);
         if (value) {
-            if (value == 4) {
-                s->enabled = true;
-            }
+            s->enabled = true;
             break;
         }
         s->enabled = false;
@@ -174,7 +201,8 @@ static void uart_write(void *opaque, hwaddr addr,
     case A_UART_SUSPEND:
     case A_UART_STOPTX:
         if (value == 1) {
-            s->tx_started = false;
+            s->reg[R_UART_TXSTARTED] = false;
+            s->reg[R_UART_TXSTOPPED] = 1;
         }
         /* fall through */
     case A_UART_STOPRX:
@@ -215,7 +243,7 @@ static void nrf51_uart_reset(DeviceState *dev)
     s->rx_fifo_len = 0;
     s->rx_fifo_pos = 0;
     s->rx_started = false;
-    s->tx_started = false;
+    s->reg[R_UART_TXSTARTED] = false;
     s->enabled = false;
 }
 
@@ -263,6 +291,13 @@ static void nrf51_uart_realize(DeviceState *dev, Error **errp)
 
     qemu_chr_fe_set_handlers(&s->chr, uart_can_receive, uart_receive,
                              uart_event, NULL, s, NULL, true);
+
+    if (!s->downstream) {
+        error_report("UARTE0 'downstream' link not set");
+        return;
+    }
+
+    address_space_init(&s->downstream_as, s->downstream, "nrf51_uart-downstream");
 }
 
 static void nrf51_uart_init(Object *obj)
@@ -297,7 +332,6 @@ static const VMStateDescription nrf51_uart_vmstate = {
         VMSTATE_UINT32(rx_fifo_pos, NRF51UARTState),
         VMSTATE_UINT32(rx_fifo_len, NRF51UARTState),
         VMSTATE_BOOL(rx_started, NRF51UARTState),
-        VMSTATE_BOOL(tx_started, NRF51UARTState),
         VMSTATE_BOOL(pending_tx_byte, NRF51UARTState),
         VMSTATE_BOOL(enabled, NRF51UARTState),
         VMSTATE_END_OF_LIST()
@@ -306,6 +340,8 @@ static const VMStateDescription nrf51_uart_vmstate = {
 
 static Property nrf51_uart_properties[] = {
     DEFINE_PROP_CHR("chardev", NRF51UARTState, chr),
+    DEFINE_PROP_LINK("downstream", NRF51UARTState, downstream,
+                     TYPE_MEMORY_REGION, MemoryRegion *),
     DEFINE_PROP_END_OF_LIST(),
 };
 

@@ -64,6 +64,6 @@ type_init(nrf52832DK_machine_init);
  *
  *../configure --target-list=arm-softmmu
  *
- * qemu-system-arm -M NRF52832DK -device loader,file=test.hex -serial stdio
+ * ./qemu-system-arm -M nrf52832DK -device loader,file=../fw/PowerMeter.elf -nographic
  *
  */

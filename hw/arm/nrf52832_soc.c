@@ -8,12 +8,13 @@
 #include "qemu/log.h"
 
 #include "hw/arm/nrf52832_soc.h"
+#include "exec/address-spaces.h"
 
 #define NRF52832_PERIPHERAL_SIZE 0x00001000
 
 #define NRF52832_FLASH_BASE      0x00000000
 #define NRF52832_FICR_BASE       0x10000000
-#define NRF52832_FICR_SIZE       0x00000100
+#define NRF52832_FICR_SIZE       0x00000500
 #define NRF52832_UICR_BASE       0x10001000
 #define NRF52832_SRAM_BASE       0x20000000
 
@@ -51,7 +52,13 @@ static const uint32_t timer__addr[] = {
 
 #define NRF52832_RTC1_BASE       0x40011000
 
+#define NRF52832_COMP_BASE       0x40013000
+
+#define NRF52832_PWM0_BASE       0x4001C000
+
 #define NRF52832_NVMC_BASE       0x4001E000
+
+#define NRF52832_PPI_BASE        0x4001F000
 
 #define NRF52832_SPIM2_BASE      0x40023000
 
@@ -113,7 +120,6 @@ static void nrf52832_soc_realize(DeviceState *dev_soc, Error **errp)
 {
     NRF52832State *s = NRF52832_SOC(dev_soc);
     MemoryRegion *mr;
-    Error *err = NULL;
     uint8_t i = 0;
     hwaddr base_addr = 0;
 
@@ -148,14 +154,13 @@ static void nrf52832_soc_realize(DeviceState *dev_soc, Error **errp)
     memory_region_add_subregion_overlap(&s->container, 0, s->board_memory, -1);
 
     memory_region_init_ram(&s->sram, OBJECT(s), "nrf52832.sram", s->sram_size,
-                           &err);
-    if (err) {
-        error_propagate(errp, err);
-        return;
-    }
+                           &error_fatal);
+
     memory_region_add_subregion(&s->container, NRF52832_SRAM_BASE, &s->sram);
 
     /* UART */
+    object_property_set_link(OBJECT(&s->uart), "downstream", OBJECT(&s->container),
+                             &error_fatal);
     if (!sysbus_realize(SYS_BUS_DEVICE(&s->uart), errp)) {
         return;
     }
@@ -255,6 +260,21 @@ static void nrf52832_soc_realize(DeviceState *dev_soc, Error **errp)
                                 NRF52832_RTC1_BASE, NRF52832_PERIPHERAL_SIZE);
     create_unimplemented_device("nrf52832_soc.rtc2",
                                 NRF52832_RTC2_BASE, NRF52832_PERIPHERAL_SIZE);
+    create_unimplemented_device("nrf52832_soc.comp",
+                                NRF52832_COMP_BASE, NRF52832_PERIPHERAL_SIZE);
+    create_unimplemented_device("nrf52832_soc.pwm0",
+                                NRF52832_PWM0_BASE, NRF52832_PERIPHERAL_SIZE);
+    create_unimplemented_device("nrf52832_soc.ppi",
+                                NRF52832_PPI_BASE, NRF52832_PERIPHERAL_SIZE);
+    create_unimplemented_device("nrf52832_soc.nfct",
+                                NRF52832_NFCT_BASE, NRF52832_PERIPHERAL_SIZE);
+
+    create_unimplemented_device("nrf52832_soc.fpu",
+                                NRF52832_FPU_BASE, NRF52832_PERIPHERAL_SIZE);
+    create_unimplemented_device("nrf52832_soc.ficr",
+                                NRF52832_FICR_BASE, NRF52832_FICR_SIZE);
+    create_unimplemented_device("nrf52832_soc.uicr",
+                                NRF52832_UICR_BASE, 0x300);
 
 }
 
