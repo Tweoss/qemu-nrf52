@@ -80,6 +80,8 @@ typedef enum {
     eEDMAtransationTWI_TX,
 } eEDMAtransation;
 
+#define NUM_SPI_SLAVES 4
+
 struct EDMAState {
     SysBusDevice parent_obj;
 
@@ -92,7 +94,7 @@ struct EDMAState {
 
     ptimer_state *ptimer;
 
-    qemu_irq cs_lines[4];
+    qemu_irq cs_lines[NUM_SPI_SLAVES];
 
     SSIBus *bus;
 

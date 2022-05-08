@@ -77,6 +77,8 @@ static void timer_hit(void *opaque)
 
     //info_report("nrf52832.edma: timer_hit %d", s->transaction);
 
+    qemu_set_irq(s->cs_lines[0], 1);
+
     switch (s->transaction) {
         case eEDMAtransationSPI:
             s->regs[R_EDMA_EVENT_ENDRX] = 1;
@@ -198,19 +200,28 @@ static void _write(void *opaque,
             if (value == 1) {
                 s->regs[R_EDMA_EVENT_SPI_XFER_STARTED] = 1;
 
+                qemu_set_irq(s->cs_lines[0], 0);
+
                 MemTxResult result = address_space_rw(&s->downstream_as,
                                                       s->regs[R_EDMA_TXD_PTR],
                                                       MEMTXATTRS_UNSPECIFIED,
                                                       s->tx_dma,
                                                       s->regs[R_EDMA_TXD_CNT],
                                                       false);
-                int i;
-                for (i=0;i<s->regs[R_EDMA_TXD_CNT];i++) {
+
+                uint32_t length = s->regs[R_EDMA_TXD_CNT] > s->regs[R_EDMA_RXD_CNT] ?
+                        s->regs[R_EDMA_TXD_CNT] : s->regs[R_EDMA_RXD_CNT];
+
+                for (int i=0;i<length;i++) {
                     uint8_t byte = ssi_transfer(s->bus, s->tx_dma[i]);
                     s->rx_dma[i] = byte;
                 }
 
-                s->regs[R_EDMA_RXD_CNT] = s->regs[R_EDMA_TXD_CNT];
+                info_report("nrf52832.edma: first byte %02X xfer size: %u",
+                            s->tx_dma[0],
+                            length);
+
+                s->regs[R_EDMA_RXD_CNT] = length;
                 s->regs[R_EDMA_TXD_CNT] = 0;
 
                 result = address_space_rw(&s->downstream_as,
@@ -276,44 +287,44 @@ static void nrf52832_edma_reset(DeviceState *dev)
     s->regs[R_EDMA_BAUDRATE] = 0x4000000;
 }
 
-static void nrf52832_edma_realize(DeviceState *dev, Error **errp)
-{
-    int i;
-    EDMAState *s = NRF52832_EDMA(dev);
-
-    s->bus = ssi_create_bus(dev, "spi");
-
-    s->i2c_bus = i2c_init_bus(dev, NULL);
-
-    for (i = 0; i < sizeof(s->cs_lines)/sizeof(s->cs_lines[0]); ++i) {
-        sysbus_init_irq(SYS_BUS_DEVICE(dev), &s->cs_lines[i]);
-    }
-
-    s->ptimer = ptimer_init(timer_hit, s, PTIMER_POLICY_DEFAULT);
-
-    if (!s->downstream) {
-        error_report("UARTE0 'downstream' link not set");
-        return;
-    }
-
-    address_space_init(&s->downstream_as, s->downstream, "nrf52832_edma-downstream");
-}
-
 static const MemoryRegionOps edma_ops = {
         .read =  _read,
         .write = _write,
         .endianness = DEVICE_LITTLE_ENDIAN,
 };
 
+static void nrf52832_edma_realize(DeviceState *dev, Error **errp)
+{
+    EDMAState *s = NRF52832_EDMA(dev);
+
+    s->bus = ssi_create_bus(dev, "ssi");
+
+    s->i2c_bus = i2c_init_bus(dev, NULL);
+
+    s->ptimer = ptimer_init(timer_hit, s, PTIMER_POLICY_DEFAULT);
+
+    if (!s->downstream) {
+        error_report("!! 'downstream' link not set");
+        return;
+    }
+
+    address_space_init(&s->downstream_as, s->downstream, "nrf52832_edma-downstream");
+
+    memory_region_init_io(&s->iomem, OBJECT(dev), &edma_ops, s,
+                          _TYPE_NAME, NRF52832_EDMA_PER_SIZE);
+    sysbus_init_mmio(SYS_BUS_DEVICE(dev), &s->iomem);
+    sysbus_init_irq(SYS_BUS_DEVICE(dev), &s->irq);
+
+//    ssi_auto_connect_slaves();
+
+    qdev_init_gpio_out_named(dev, s->cs_lines, "cs_lines",NUM_SPI_SLAVES);
+}
+
 static void nrf52832_edma_init(Object *obj)
 {
-    EDMAState *s = NRF52832_EDMA(obj);
-    SysBusDevice *sbd = SYS_BUS_DEVICE(obj);
+//    EDMAState *s = NRF52832_EDMA(obj);
+//    SysBusDevice *sbd = SYS_BUS_DEVICE(obj);
 
-    memory_region_init_io(&s->iomem, obj, &edma_ops, s,
-                          _TYPE_NAME, NRF52832_EDMA_PER_SIZE);
-    sysbus_init_mmio(sbd, &s->iomem);
-    sysbus_init_irq(sbd, &s->irq);
 }
 
 static int nrf52832_edma_post_load(void *opaque, int version_id)

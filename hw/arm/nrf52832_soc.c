@@ -9,6 +9,8 @@
 
 #include "hw/arm/nrf52832_soc.h"
 #include "exec/address-spaces.h"
+#include "sysemu/blockdev.h"
+#include "hw/ssi/ssi.h"
 
 #define NRF52832_PERIPHERAL_SIZE 0x00001000
 

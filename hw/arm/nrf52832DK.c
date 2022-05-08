@@ -9,6 +9,7 @@
 #include "hw/arm/nrf52832_soc.h"
 #include "hw/qdev-properties.h"
 #include "qom/object.h"
+#include "hw/ssi/ssi.h"
 
 struct nrf52832DKMachineState {
     MachineState parent;
@@ -32,9 +33,22 @@ static void nrf52832DK_init(MachineState *machine)
                              OBJECT(system_memory), &error_fatal);
     sysbus_realize(SYS_BUS_DEVICE(&s->nrf52832), &error_fatal);
 
-
     armv7m_load_kernel(ARM_CPU(first_cpu), machine->kernel_filename,
                        s->nrf52832.flash_size);
+
+    // SD card
+    {
+        void *bus;
+        DeviceState *carddev;
+
+        bus = qdev_get_child_bus(DEVICE(&s->nrf52832.spim0_twim0), "ssi");
+        assert(bus);
+        carddev = ssi_create_peripheral(bus, "ssi-sd");
+
+        // Connect CS
+        qemu_irq line = qdev_get_gpio_in_named(carddev, SSI_GPIO_CS, 0);
+        qdev_connect_gpio_out_named(DEVICE(&s->nrf52832.spim0_twim0), "cs_lines", 0, line);
+    }
 }
 
 static void nrf52832DK_machine_class_init(ObjectClass *oc, void *data)
