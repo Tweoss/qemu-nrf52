@@ -170,6 +170,42 @@ static void nrf52832_soc_realize(DeviceState *dev_soc, Error **errp)
                        qdev_get_gpio_in(DEVICE(&s->armv7m),
                                         BASE_TO_IRQ(NRF52832_UART0_BASE)));
 
+    /* TWIM0 / SPIM0 */
+    object_property_set_link(OBJECT(&s->spim0_twim0), "downstream", OBJECT(&s->container),
+                             &error_fatal);
+    if (!sysbus_realize(SYS_BUS_DEVICE(&s->spim0_twim0), errp)) {
+        return;
+    }
+    mr = sysbus_mmio_get_region(SYS_BUS_DEVICE(&s->spim0_twim0), 0);
+    memory_region_add_subregion_overlap(&s->container, NRF52832_BOX0_BASE, mr, 0);
+    sysbus_connect_irq(SYS_BUS_DEVICE(&s->spim0_twim0), 0,
+                       qdev_get_gpio_in(DEVICE(&s->armv7m),
+                                        BASE_TO_IRQ(NRF52832_BOX0_BASE)));
+
+    /* TWIM1 / SPIM1 */
+    object_property_set_link(OBJECT(&s->spim1_twim1), "downstream", OBJECT(&s->container),
+                             &error_fatal);
+    if (!sysbus_realize(SYS_BUS_DEVICE(&s->spim1_twim1), errp)) {
+        return;
+    }
+    mr = sysbus_mmio_get_region(SYS_BUS_DEVICE(&s->spim1_twim1), 0);
+    memory_region_add_subregion_overlap(&s->container, NRF52832_BOX1_BASE, mr, 0);
+    sysbus_connect_irq(SYS_BUS_DEVICE(&s->spim1_twim1), 0,
+                       qdev_get_gpio_in(DEVICE(&s->armv7m),
+                                        BASE_TO_IRQ(NRF52832_BOX1_BASE)));
+
+    /* SPIM2 */
+    object_property_set_link(OBJECT(&s->spim2), "downstream", OBJECT(&s->container),
+                             &error_fatal);
+    if (!sysbus_realize(SYS_BUS_DEVICE(&s->spim2), errp)) {
+        return;
+    }
+    mr = sysbus_mmio_get_region(SYS_BUS_DEVICE(&s->spim2), 0);
+    memory_region_add_subregion_overlap(&s->container, NRF52832_SPIM2_BASE, mr, 0);
+    sysbus_connect_irq(SYS_BUS_DEVICE(&s->spim2), 0,
+                       qdev_get_gpio_in(DEVICE(&s->armv7m),
+                                        BASE_TO_IRQ(NRF52832_SPIM2_BASE)));
+
     /* RNG */
     if (!sysbus_realize(SYS_BUS_DEVICE(&s->rng), errp)) {
         return;
@@ -242,16 +278,16 @@ static void nrf52832_soc_realize(DeviceState *dev_soc, Error **errp)
     // peripherals
     create_unimplemented_device("nrf52832_soc.radio",
                                 NRF52832_RADIO_BASE, NRF52832_PERIPHERAL_SIZE);
-    create_unimplemented_device("nrf52832_soc.box0",
-                                NRF52832_BOX0_BASE, NRF52832_PERIPHERAL_SIZE);
-    create_unimplemented_device("nrf52832_soc.box1",
-                                NRF52832_BOX1_BASE, NRF52832_PERIPHERAL_SIZE);
+//    create_unimplemented_device("nrf52832_soc.box0",
+//                                NRF52832_BOX0_BASE, NRF52832_PERIPHERAL_SIZE);
+//    create_unimplemented_device("nrf52832_soc.box1",
+//                                NRF52832_BOX1_BASE, NRF52832_PERIPHERAL_SIZE);
     create_unimplemented_device("nrf52832_soc.gpiote",
                                 NRF52832_GPIOTE_BASE, NRF52832_PERIPHERAL_SIZE);
     create_unimplemented_device("nrf52832_soc.saadc",
                                 NRF52832_SAADC_BASE, NRF52832_PERIPHERAL_SIZE);
-    create_unimplemented_device("nrf52832_soc.spim2",
-                                NRF52832_SPIM2_BASE, NRF52832_PERIPHERAL_SIZE);
+//    create_unimplemented_device("nrf52832_soc.spim2",
+//                                NRF52832_SPIM2_BASE, NRF52832_PERIPHERAL_SIZE);
     create_unimplemented_device("nrf52832_soc.wdt",
                                 NRF52832_WDT_BASE, NRF52832_PERIPHERAL_SIZE);
     create_unimplemented_device("nrf52832_soc.rtc0",
@@ -292,6 +328,10 @@ static void nrf52832_soc_init(Object *obj)
 
     object_initialize_child(obj, "uart", &s->uart, TYPE_NRF51_UART);
     object_property_add_alias(obj, "serial0", OBJECT(&s->uart), "chardev");
+
+    object_initialize_child(obj, "box0", &s->spim0_twim0, TYPE_NRF52832_EDMA);
+    object_initialize_child(obj, "box1", &s->spim1_twim1, TYPE_NRF52832_EDMA);
+    object_initialize_child(obj, "spim2", &s->spim2, TYPE_NRF52832_EDMA);
 
     object_initialize_child(obj, "rng", &s->rng, TYPE_NRF51_RNG);
 
