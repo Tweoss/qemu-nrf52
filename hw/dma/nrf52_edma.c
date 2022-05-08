@@ -12,6 +12,8 @@
 #include "migration/vmstate.h"
 #include "hw/dma/nrf52_edma.h"
 #include "trace.h"
+#include "hw/ssi/ssi.h"
+#include "hw/i2c/i2c.h"
 
 #define _TYPE_NAME "nrf52832_soc.edma"
 
@@ -19,8 +21,28 @@ static void nrf52832_edma_update_irq(EDMAState *s)
 {
     bool irq = false;
 
+    irq |= (s->regs[R_EDMA_EVENT_STOPPED]   &&
+            (s->regs[R_EDMA_INTEN] & R_EDMA_INTEN_STOPPED_MASK));
+    irq |= (s->regs[R_EDMA_EVENT_ENDRX]   &&
+            (s->regs[R_EDMA_INTEN] & R_EDMA_INTEN_ENDRX_MASK));
+    irq |= (s->regs[R_EDMA_EVENT_END]   &&
+            (s->regs[R_EDMA_INTEN] & R_EDMA_INTEN_END_MASK));
     irq |= (s->regs[R_EDMA_EVENT_ENDTX]   &&
             (s->regs[R_EDMA_INTEN] & R_EDMA_INTEN_ENDTX_MASK));
+    irq |= (s->regs[R_EDMA_EVENT_SUSPENDED]   &&
+            (s->regs[R_EDMA_INTEN] & R_EDMA_INTEN_SUSPENDED_MASK));
+    irq |= (s->regs[R_EDMA_EVENT_TWI_RX_STARTED]   &&
+            (s->regs[R_EDMA_INTEN] & R_EDMA_INTEN_STARTED_MASK));
+    irq |= (s->regs[R_EDMA_EVENT_TWI_RX_STARTED]   &&
+            (s->regs[R_EDMA_INTEN] & R_EDMA_INTEN_STARTED_MASK));
+    irq |= (s->regs[R_EDMA_EVENT_SPI_XFER_STARTED]   &&
+            (s->regs[R_EDMA_INTEN] & R_EDMA_INTEN_STARTED_MASK));
+    irq |= (s->regs[R_EDMA_EVENT_TWI_TX_STARTED]   &&
+            (s->regs[R_EDMA_INTEN] & R_EDMA_INTEN_TX_STARTED_MASK));
+    irq |= (s->regs[R_EDMA_EVENT_STOPPED]   &&
+            (s->regs[R_EDMA_INTEN] & R_EDMA_INTEN_STOPPED_MASK));
+
+    //info_report("nrf52832.edma: irq %d ENDTX %u", irq, s->regs[R_EDMA_EVENT_ENDTX]);
 
     qemu_set_irq(s->irq, irq);
 }
@@ -49,6 +71,34 @@ static uint64_t _read(void *opaque,
 
 }
 
+static void timer_hit(void *opaque)
+{
+    struct EDMAState *s = opaque;
+
+    //info_report("nrf52832.edma: timer_hit %d", s->transaction);
+
+    switch (s->transaction) {
+        case eEDMAtransationSPI:
+            s->regs[R_EDMA_EVENT_ENDRX] = 1;
+            s->regs[R_EDMA_EVENT_ENDTX] = 1;
+            s->regs[R_EDMA_EVENT_END] = 1;
+            break;
+        case eEDMAtransationTWI_RX:
+            s->regs[R_EDMA_EVENT_LAST_RX] = 1;
+            s->regs[R_EDMA_EVENT_ENDRX] = 1;
+            s->regs[R_EDMA_EVENT_END] = 1;
+            break;
+        case eEDMAtransationTWI_TX:
+            s->regs[R_EDMA_EVENT_ENDTX] = 1;
+            s->regs[R_EDMA_EVENT_END] = 1;
+            break;
+        default:
+            break;
+    }
+
+    nrf52832_edma_update_irq(s);
+}
+
 static void _write(void *opaque,
               hwaddr addr,
               uint64_t value,
@@ -71,25 +121,121 @@ static void _write(void *opaque,
 
             // TWI
         case A_EDMA_TASKS_START_TWI_TX:
-            s->is_spi_selected = false;
+            s->transaction = eEDMAtransationTWI_TX;
             if (value == 1) {
                 s->regs[R_EDMA_EVENT_TWI_TX_STARTED] = 1;
-                // TODO uart_transmit(NULL, G_IO_OUT, s); // easy DMA start
+
+                if (i2c_start_send(s->i2c_bus, s->regs[R_EDMA_TWI_ADDRESS])) {
+                    /* if non zero is returned, the address is not valid */
+                    s->regs[R_EDMA_EVENT_ENDTX] = 1;
+                    s->regs[R_EDMA_EVENT_END] = 1;
+                } else {
+
+                    MemTxResult result = address_space_rw(&s->downstream_as,
+                                                          s->regs[R_EDMA_TXD_PTR],
+                                                          MEMTXATTRS_UNSPECIFIED,
+                                                          s->tx_dma,
+                                                          s->regs[R_EDMA_TXD_CNT],
+                                                          false);
+
+                    int i;
+                    for (i=0;i<s->regs[R_EDMA_TXD_CNT];i++) {
+                        i2c_send(s->i2c_bus, s->tx_dma[i]);
+                    }
+                    i2c_end_transfer(s->i2c_bus);
+                    (void)result;
+
+                    ptimer_transaction_begin(s->ptimer);
+                    ptimer_stop(s->ptimer);
+                    ptimer_set_freq(s->ptimer, 100000);
+                    ptimer_set_count(s->ptimer, s->regs[R_EDMA_TXD_CNT] << 3);
+                    ptimer_run(s->ptimer, 1);
+                    ptimer_transaction_commit(s->ptimer);
+
+                    s->regs[R_EDMA_TXD_CNT] = 0;
+
+                }
             }
             break;
         case A_EDMA_TASKS_START_TWI_RX:
-            s->is_spi_selected = false;
+            s->transaction = eEDMAtransationTWI_RX;
             if (value == 1) {
                 s->regs[R_EDMA_EVENT_TWI_RX_STARTED] = 1;
-                //s->rx_started = true;
+
+                if (i2c_start_recv(s->i2c_bus, s->regs[R_EDMA_TWI_ADDRESS])) {
+                    /* if non zero is returned, the address is not valid */
+                    s->regs[R_EDMA_EVENT_ENDRX] = 1;
+                    s->regs[R_EDMA_EVENT_END] = 1;
+                } else {
+
+                    int i;
+                    for (i=0;i<s->regs[R_EDMA_TXD_CNT];i++) {
+                        s->rx_dma[i] = i2c_recv(s->i2c_bus);
+                    }
+                    i2c_end_transfer(s->i2c_bus);
+
+                    MemTxResult result = address_space_rw(&s->downstream_as,
+                                                          s->regs[R_EDMA_RXD_PTR],
+                                                          MEMTXATTRS_UNSPECIFIED,
+                                                          s->rx_dma,
+                                                          s->regs[R_EDMA_RXD_CNT],
+                                                          true);
+
+                    ptimer_transaction_begin(s->ptimer);
+                    ptimer_stop(s->ptimer);
+                    ptimer_set_freq(s->ptimer, 100000);
+                    ptimer_set_count(s->ptimer, s->regs[R_EDMA_RXD_CNT] << 3);
+                    ptimer_run(s->ptimer, 1);
+                    ptimer_transaction_commit(s->ptimer);
+                    (void)result;
+                }
             }
             break;
+
+            // SPI
         case A_EDMA_TASKS_START_SPI:
-            s->is_spi_selected = true;
+            s->transaction = eEDMAtransationSPI;
             if (value == 1) {
                 s->regs[R_EDMA_EVENT_SPI_XFER_STARTED] = 1;
-                //s->rx_started = true;
+
+                MemTxResult result = address_space_rw(&s->downstream_as,
+                                                      s->regs[R_EDMA_TXD_PTR],
+                                                      MEMTXATTRS_UNSPECIFIED,
+                                                      s->tx_dma,
+                                                      s->regs[R_EDMA_TXD_CNT],
+                                                      false);
+                int i;
+                for (i=0;i<s->regs[R_EDMA_TXD_CNT];i++) {
+                    uint8_t byte = ssi_transfer(s->bus, s->tx_dma[i]);
+                    s->rx_dma[i] = byte;
+                }
+
+                s->regs[R_EDMA_RXD_CNT] = s->regs[R_EDMA_TXD_CNT];
+                s->regs[R_EDMA_TXD_CNT] = 0;
+
+                result = address_space_rw(&s->downstream_as,
+                                          s->regs[R_EDMA_RXD_PTR],
+                                          MEMTXATTRS_UNSPECIFIED,
+                                          s->rx_dma,
+                                          s->regs[R_EDMA_RXD_CNT],
+                                          true);
+                (void)result;
+
+                ptimer_transaction_begin(s->ptimer);
+                ptimer_stop(s->ptimer);
+                ptimer_set_freq(s->ptimer, 1000000);
+                ptimer_set_count(s->ptimer, 64 + (s->regs[R_EDMA_RXD_CNT] << 3));
+                ptimer_run(s->ptimer, 1);
+                ptimer_transaction_commit(s->ptimer);
             }
+            break;
+
+        case A_EDMA_TASKS_STOP:
+            s->regs[R_EDMA_EVENT_STOPPED] = 1;
+            s->regs[R_EDMA_EVENT_ENDRX] = 1;
+            ptimer_transaction_begin(s->ptimer);
+            ptimer_stop(s->ptimer);
+            ptimer_transaction_commit(s->ptimer);
             break;
 
         case A_EDMA_INTEN:
@@ -112,22 +258,38 @@ static void _write(void *opaque,
 
 static void nrf52832_edma_reset(DeviceState *dev)
 {
+    int i;
     EDMAState *s = NRF52832_EDMA(dev);
 
     memset(s->regs, 0, sizeof(s->regs));
 
+    for (i = 0; i < sizeof(s->cs_lines)/sizeof(s->cs_lines[0]); ++i) {
+        sysbus_init_irq(SYS_BUS_DEVICE(dev), &s->cs_lines[i]);
+    }
+
     s->enabled = false;
 
-//    s->regs[R_UART_PSELRTS] = 0xFFFFFFFF;
-//    s->regs[R_UART_PSELTXD] = 0xFFFFFFFF;
-//    s->regs[R_UART_PSELCTS] = 0xFFFFFFFF;
-//    s->regs[R_UART_PSELRXD] = 0xFFFFFFFF;
-//    s->regs[R_UART_BAUDRATE] = 0x4000000;
+    s->regs[R_EDMA_PSELRTS] = 0xFFFFFFFF;
+    s->regs[R_EDMA_PSELTXD] = 0xFFFFFFFF;
+    s->regs[R_EDMA_PSELCTS] = 0xFFFFFFFF;
+    s->regs[R_EDMA_PSELRXD] = 0xFFFFFFFF;
+    s->regs[R_EDMA_BAUDRATE] = 0x4000000;
 }
 
 static void nrf52832_edma_realize(DeviceState *dev, Error **errp)
 {
+    int i;
     EDMAState *s = NRF52832_EDMA(dev);
+
+    s->bus = ssi_create_bus(dev, "spi");
+
+    s->i2c_bus = i2c_init_bus(dev, NULL);
+
+    for (i = 0; i < sizeof(s->cs_lines)/sizeof(s->cs_lines[0]); ++i) {
+        sysbus_init_irq(SYS_BUS_DEVICE(dev), &s->cs_lines[i]);
+    }
+
+    s->ptimer = ptimer_init(timer_hit, s, PTIMER_POLICY_DEFAULT);
 
     if (!s->downstream) {
         error_report("UARTE0 'downstream' link not set");

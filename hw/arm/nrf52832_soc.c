@@ -278,16 +278,10 @@ static void nrf52832_soc_realize(DeviceState *dev_soc, Error **errp)
     // peripherals
     create_unimplemented_device("nrf52832_soc.radio",
                                 NRF52832_RADIO_BASE, NRF52832_PERIPHERAL_SIZE);
-//    create_unimplemented_device("nrf52832_soc.box0",
-//                                NRF52832_BOX0_BASE, NRF52832_PERIPHERAL_SIZE);
-//    create_unimplemented_device("nrf52832_soc.box1",
-//                                NRF52832_BOX1_BASE, NRF52832_PERIPHERAL_SIZE);
     create_unimplemented_device("nrf52832_soc.gpiote",
                                 NRF52832_GPIOTE_BASE, NRF52832_PERIPHERAL_SIZE);
     create_unimplemented_device("nrf52832_soc.saadc",
                                 NRF52832_SAADC_BASE, NRF52832_PERIPHERAL_SIZE);
-//    create_unimplemented_device("nrf52832_soc.spim2",
-//                                NRF52832_SPIM2_BASE, NRF52832_PERIPHERAL_SIZE);
     create_unimplemented_device("nrf52832_soc.wdt",
                                 NRF52832_WDT_BASE, NRF52832_PERIPHERAL_SIZE);
     create_unimplemented_device("nrf52832_soc.rtc0",
@@ -324,7 +318,7 @@ static void nrf52832_soc_init(Object *obj)
 
     object_initialize_child(OBJECT(s), "armv7m", &s->armv7m, TYPE_ARMV7M);
     qdev_prop_set_string(DEVICE(&s->armv7m), "cpu-type", ARM_CPU_TYPE_NAME("cortex-m4"));
-    qdev_prop_set_uint32(DEVICE(&s->armv7m), "num-irq", 32);
+    qdev_prop_set_uint32(DEVICE(&s->armv7m), "num-irq", 37);
 
     object_initialize_child(obj, "uart", &s->uart, TYPE_NRF51_UART);
     object_property_add_alias(obj, "serial0", OBJECT(&s->uart), "chardev");
@@ -365,7 +359,7 @@ static void nrf52832_soc_class_init(ObjectClass *klass, void *data)
     device_class_set_props(dc, nrf52832_soc_properties);
 }
 
-static const TypeInfo nrf51_soc_info = {
+static const TypeInfo nrf52832_soc_info = {
         .name          = TYPE_NRF52832_SOC,
         .parent        = TYPE_SYS_BUS_DEVICE,
         .instance_size = sizeof(NRF52832State),
@@ -373,8 +367,8 @@ static const TypeInfo nrf51_soc_info = {
         .class_init    = nrf52832_soc_class_init,
 };
 
-static void nrf51_soc_types(void)
+static void nrf52832_soc_types(void)
 {
-    type_register_static(&nrf51_soc_info);
+    type_register_static(&nrf52832_soc_info);
 }
-type_init(nrf51_soc_types)
+type_init(nrf52832_soc_types)
