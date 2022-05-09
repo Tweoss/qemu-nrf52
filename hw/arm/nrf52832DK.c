@@ -78,7 +78,11 @@ type_init(nrf52832DK_machine_init);
  *
  * ../configure --target-list=arm-softmmu
  *
+ * In order to use a .img SD card image, you can first format it on the host via mkfs.vfat -s 16 -F 32 ./sd0.img (https://www.linux.org/threads/qemu.10727/)
+ *
  * ./qemu-img create -f raw ../sd0.img 4G
+ *
+ * ./qemu-img convert -f raw -O qcow2 sd0.img sd1.img
  *
  * ./qemu-system-arm -M nrf52832DK -device loader,file=../fw/PowerMeter.elf -nographic -drive file=../sd0.img,id=mycard,format=qcow2,if=none -device sd-card,spi=true,spec_version=3,drive=mycard -s -S
  *

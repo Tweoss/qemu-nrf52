@@ -42,7 +42,7 @@ static void nrf52832_edma_update_irq(EDMAState *s)
     irq |= (s->regs[R_EDMA_EVENT_STOPPED]   &&
             (s->regs[R_EDMA_INTEN] & R_EDMA_INTEN_STOPPED_MASK));
 
-    //info_report("nrf52832.edma: irq %d ENDTX %u", irq, s->regs[R_EDMA_EVENT_ENDTX]);
+    info_report("nrf52832.edma: irq %d STOPPED %u", irq, s->regs[R_EDMA_EVENT_STOPPED]);
 
     qemu_set_irq(s->irq, irq);
 }
@@ -77,7 +77,6 @@ static void timer_hit(void *opaque)
 
     //info_report("nrf52832.edma: timer_hit %d", s->transaction);
 
-
     switch (s->transaction) {
         case eEDMAtransationSPI:
             s->regs[R_EDMA_EVENT_ENDRX] = 1;
@@ -87,10 +86,12 @@ static void timer_hit(void *opaque)
         case eEDMAtransationTWI_RX:
             s->regs[R_EDMA_EVENT_LAST_RX] = 1;
             s->regs[R_EDMA_EVENT_ENDRX] = 1;
+            s->regs[R_EDMA_EVENT_STOPPED] = 1;
             s->regs[R_EDMA_EVENT_END] = 1;
             break;
         case eEDMAtransationTWI_TX:
             s->regs[R_EDMA_EVENT_ENDTX] = 1;
+            s->regs[R_EDMA_EVENT_STOPPED] = 1;
             s->regs[R_EDMA_EVENT_END] = 1;
             break;
         default:
@@ -128,8 +129,7 @@ static void _write(void *opaque,
 
                 if (i2c_start_send(s->i2c_bus, s->regs[R_EDMA_TWI_ADDRESS])) {
                     /* if non zero is returned, the address is not valid */
-                    s->regs[R_EDMA_EVENT_ENDTX] = 1;
-                    s->regs[R_EDMA_EVENT_END] = 1;
+                    timer_hit((void*)s);
                 } else {
 
                     MemTxResult result = address_space_rw(&s->downstream_as,
@@ -149,7 +149,7 @@ static void _write(void *opaque,
                     ptimer_transaction_begin(s->ptimer);
                     ptimer_stop(s->ptimer);
                     ptimer_set_freq(s->ptimer, 100000);
-                    ptimer_set_count(s->ptimer, s->regs[R_EDMA_TXD_CNT] << 3);
+                    ptimer_set_count(s->ptimer, 64 + (s->regs[R_EDMA_TXD_CNT] << 3));
                     ptimer_run(s->ptimer, 1);
                     ptimer_transaction_commit(s->ptimer);
 
@@ -165,8 +165,7 @@ static void _write(void *opaque,
 
                 if (i2c_start_recv(s->i2c_bus, s->regs[R_EDMA_TWI_ADDRESS])) {
                     /* if non zero is returned, the address is not valid */
-                    s->regs[R_EDMA_EVENT_ENDRX] = 1;
-                    s->regs[R_EDMA_EVENT_END] = 1;
+                    timer_hit((void*)s);
                 } else {
 
                     int i;
