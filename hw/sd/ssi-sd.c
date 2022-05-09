@@ -42,6 +42,7 @@ do { fprintf(stderr, "ssi_sd: error: " fmt , ## __VA_ARGS__);} while (0)
 typedef enum {
     SSI_SD_CMD = 0,
     SSI_SD_CMDARG,
+    SSI_SD_CMDCRC,
     SSI_SD_PREP_RESP,
     SSI_SD_RESPONSE,
     SSI_SD_PREP_DATA,
@@ -57,11 +58,13 @@ struct ssi_sd_state {
     uint32_t mode;
     int cmd;
     uint8_t cmdarg[4];
+    uint8_t cmdcrc;
     uint8_t response[5];
     uint16_t crc16;
     int32_t read_bytes;
     int32_t write_bytes;
     int32_t arglen;
+    int32_t ncrlen;
     int32_t response_pos;
     int32_t stopping;
     SDBus sdbus;
@@ -164,10 +167,32 @@ static uint32_t ssi_sd_transfer(SSIPeripheral *dev, uint32_t val)
         s->cmd = val & 0x3f;
         s->mode = SSI_SD_CMDARG;
         s->arglen = 0;
+        s->ncrlen = 0;
         return SSI_DUMMY;
     case SSI_SD_CMDARG:
+        {
+            s->ncrlen++;
+            if (s->arglen < 4) {
+                DPRINTF("CMD arg 0x%02x\n", (uint8_t)val);
+                s->cmdarg[s->arglen++] = (uint8_t)val;
+                s->ncrlen = 0;
+            } else if (s->ncrlen == 1) {
+                s->cmdcrc = (uint8_t)val;
+                DPRINTF("CMD%d crc 0x%02x\n", s->cmd, (uint8_t)val);
+            } else {
+                if (s->ncrlen >= 2) {
+                    s->mode = SSI_SD_CMDCRC;
+                }
+            }
+        }
+        return SSI_DUMMY;
+    case SSI_SD_CMDCRC:
         if (s->arglen == 4) {
-            /* FIXME: Check CRC.  */
+            if (s->cmd == 0x00u && s->cmdcrc != 0x95u) {
+                return SSI_DUMMY;
+            } else {
+                /* FIXME: Check CRC.  */
+            }
             request.cmd = s->cmd;
             request.arg = ldl_be_p(s->cmdarg);
             DPRINTF("CMD%d arg 0x%08x\n", s->cmd, request.arg);
@@ -241,7 +266,7 @@ static uint32_t ssi_sd_transfer(SSIPeripheral *dev, uint32_t val)
             s->mode = SSI_SD_PREP_RESP;
             s->response_pos = 0;
         } else {
-            s->cmdarg[s->arglen++] = val;
+            DPRINTF("Wrong length: %d\n", s->arglen);
         }
         return SSI_DUMMY;
     case SSI_SD_PREP_RESP:
@@ -389,6 +414,34 @@ static void ssi_sd_reset(DeviceState *dev)
     s->stopping = 0;
 }
 
+static int _set_cs(SSIPeripheral *dev, bool select) {
+
+    // called when the state of the CS line changes
+    ssi_sd_state *s = SSI_SD(dev);
+
+    DPRINTF("_set_cs %d \n", select);
+    if (select) {
+        // unused
+    }
+
+    s->arglen = 0;
+    s->ncrlen = 0;
+
+    if (s->mode <= SSI_SD_CMDCRC) {
+        s->mode = 0;
+        s->cmd = 0;
+
+        memset(s->cmdarg, 0, sizeof(s->cmdarg));
+        memset(s->response, 0, sizeof(s->response));
+        s->crc16 = 0;
+        s->read_bytes = 0;
+        s->write_bytes = 0;
+        s->response_pos = 0;
+    }
+
+    return 0;
+}
+
 static void ssi_sd_class_init(ObjectClass *klass, void *data)
 {
     DeviceClass *dc = DEVICE_CLASS(klass);
@@ -397,6 +450,7 @@ static void ssi_sd_class_init(ObjectClass *klass, void *data)
     k->realize = ssi_sd_realize;
     k->transfer = ssi_sd_transfer;
     k->cs_polarity = SSI_CS_LOW;
+    k->set_cs = _set_cs;
     dc->vmsd = &vmstate_ssi_sd;
     dc->reset = ssi_sd_reset;
     /* Reason: GPIO chip-select line should be wired up */

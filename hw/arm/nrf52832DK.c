@@ -80,6 +80,6 @@ type_init(nrf52832DK_machine_init);
  *
  * ./qemu-img create -f raw ../sd0.img 4G
  *
- * ./qemu-system-arm -M nrf52832DK -device loader,file=../fw/PowerMeter.elf -nographic -drive file=../sd0.img,id=mycard,format=qcow2,if=none -device sd-card,spi=true,spec_version=1,drive=mycard -s -S
+ * ./qemu-system-arm -M nrf52832DK -device loader,file=../fw/PowerMeter.elf -nographic -drive file=../sd0.img,id=mycard,format=qcow2,if=none -device sd-card,spi=true,spec_version=3,drive=mycard -s -S
  *
  */

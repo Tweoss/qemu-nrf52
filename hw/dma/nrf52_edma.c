@@ -77,7 +77,6 @@ static void timer_hit(void *opaque)
 
     //info_report("nrf52832.edma: timer_hit %d", s->transaction);
 
-    qemu_set_irq(s->cs_lines[0], 1);
 
     switch (s->transaction) {
         case eEDMAtransationSPI:
@@ -208,18 +207,32 @@ static void _write(void *opaque,
                                                       s->tx_dma,
                                                       s->regs[R_EDMA_TXD_CNT],
                                                       false);
+                (void)result;
 
                 uint32_t length = s->regs[R_EDMA_TXD_CNT] > s->regs[R_EDMA_RXD_CNT] ?
                         s->regs[R_EDMA_TXD_CNT] : s->regs[R_EDMA_RXD_CNT];
+
+                info_report("nrf52832.edma: xfer size: %u %u %u",
+                            s->regs[R_EDMA_TXD_CNT],
+                            s->regs[R_EDMA_RXD_CNT],
+                            length);
+
+                printf("TX:");
+                for (int i=0;i<length;i++) {
+                    printf(" %02X" , s->tx_dma[i]);
+                }
+                printf("\n");
 
                 for (int i=0;i<length;i++) {
                     uint8_t byte = ssi_transfer(s->bus, s->tx_dma[i]);
                     s->rx_dma[i] = byte;
                 }
 
-                info_report("nrf52832.edma: first byte %02X xfer size: %u",
-                            s->tx_dma[0],
-                            length);
+                printf("RX:");
+                for (int i=0;i<length;i++) {
+                    printf(" %02X" , s->rx_dma[i]);
+                }
+                printf("\n");
 
                 s->regs[R_EDMA_RXD_CNT] = length;
                 s->regs[R_EDMA_TXD_CNT] = 0;
@@ -231,6 +244,8 @@ static void _write(void *opaque,
                                           s->regs[R_EDMA_RXD_CNT],
                                           true);
                 (void)result;
+
+                qemu_set_irq(s->cs_lines[0], 1);
 
                 ptimer_transaction_begin(s->ptimer);
                 ptimer_stop(s->ptimer);
@@ -269,14 +284,9 @@ static void _write(void *opaque,
 
 static void nrf52832_edma_reset(DeviceState *dev)
 {
-    int i;
     EDMAState *s = NRF52832_EDMA(dev);
 
     memset(s->regs, 0, sizeof(s->regs));
-
-    for (i = 0; i < sizeof(s->cs_lines)/sizeof(s->cs_lines[0]); ++i) {
-        sysbus_init_irq(SYS_BUS_DEVICE(dev), &s->cs_lines[i]);
-    }
 
     s->enabled = false;
 
