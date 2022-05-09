@@ -15,6 +15,7 @@
 #include "hw/clock.h"
 #include "qom/object.h"
 #include "hw/dma/nrf52_edma.h"
+#include "hw/timer/nrf_rtc.h"
 
 #define TYPE_NRF52832_SOC "nrf52832-soc"
 OBJECT_DECLARE_SIMPLE_TYPE(NRF52832State, NRF52832_SOC)
@@ -50,6 +51,10 @@ struct NRF52832State {
     EDMAState spim2;
 
     NRF51TimerState timer[NRF52832_NUM_TIMERS];
+
+    NRF5RtcState rtc0;
+    NRF5RtcState rtc1;
+    NRF5RtcState rtc2;
 
     Clock *sysclk;
 };

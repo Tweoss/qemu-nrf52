@@ -242,7 +242,6 @@ static void nrf52832_soc_realize(DeviceState *dev_soc, Error **errp)
     if (!sysbus_realize(SYS_BUS_DEVICE(&s->gpio), errp)) {
         return;
     }
-
     mr = sysbus_mmio_get_region(SYS_BUS_DEVICE(&s->gpio), 0);
     memory_region_add_subregion_overlap(&s->container, NRF52832_GPIO_BASE, mr, 0);
 
@@ -266,6 +265,33 @@ static void nrf52832_soc_realize(DeviceState *dev_soc, Error **errp)
                                             BASE_TO_IRQ(base_addr)));
     }
 
+    /* RTC0 */
+    if (!sysbus_realize(SYS_BUS_DEVICE(&s->rtc0), errp)) {
+        return;
+    }
+    sysbus_mmio_map(SYS_BUS_DEVICE(&s->rtc0), 0, NRF52832_RTC0_BASE);
+    sysbus_connect_irq(SYS_BUS_DEVICE(&s->rtc0), 0,
+                       qdev_get_gpio_in(DEVICE(&s->armv7m),
+                                        BASE_TO_IRQ(NRF52832_RTC0_BASE)));
+
+    /* RTC1 */
+    if (!sysbus_realize(SYS_BUS_DEVICE(&s->rtc1), errp)) {
+        return;
+    }
+    sysbus_mmio_map(SYS_BUS_DEVICE(&s->rtc1), 0, NRF52832_RTC1_BASE);
+    sysbus_connect_irq(SYS_BUS_DEVICE(&s->rtc1), 0,
+                       qdev_get_gpio_in(DEVICE(&s->armv7m),
+                                        BASE_TO_IRQ(NRF52832_RTC1_BASE)));
+
+    /* RTC2 */
+    if (!sysbus_realize(SYS_BUS_DEVICE(&s->rtc2), errp)) {
+        return;
+    }
+    sysbus_mmio_map(SYS_BUS_DEVICE(&s->rtc2), 0, NRF52832_RTC2_BASE);
+    sysbus_connect_irq(SYS_BUS_DEVICE(&s->rtc2), 0,
+                       qdev_get_gpio_in(DEVICE(&s->armv7m),
+                                        BASE_TO_IRQ(NRF52832_RTC2_BASE)));
+
     /* STUB Peripherals */
     memory_region_init_io(&s->clock, OBJECT(dev_soc), &clock_ops, NULL,
                           "nrf52832_soc.clock", NRF52832_PERIPHERAL_SIZE);
@@ -286,12 +312,12 @@ static void nrf52832_soc_realize(DeviceState *dev_soc, Error **errp)
                                 NRF52832_SAADC_BASE, NRF52832_PERIPHERAL_SIZE);
     create_unimplemented_device("nrf52832_soc.wdt",
                                 NRF52832_WDT_BASE, NRF52832_PERIPHERAL_SIZE);
-    create_unimplemented_device("nrf52832_soc.rtc0",
-                                NRF52832_RTC0_BASE, NRF52832_PERIPHERAL_SIZE);
-    create_unimplemented_device("nrf52832_soc.rtc1",
-                                NRF52832_RTC1_BASE, NRF52832_PERIPHERAL_SIZE);
-    create_unimplemented_device("nrf52832_soc.rtc2",
-                                NRF52832_RTC2_BASE, NRF52832_PERIPHERAL_SIZE);
+//    create_unimplemented_device("nrf52832_soc.rtc0",
+//                                NRF52832_RTC0_BASE, NRF52832_PERIPHERAL_SIZE);
+//    create_unimplemented_device("nrf52832_soc.rtc1",
+//                                NRF52832_RTC1_BASE, NRF52832_PERIPHERAL_SIZE);
+//    create_unimplemented_device("nrf52832_soc.rtc2",
+//                                NRF52832_RTC2_BASE, NRF52832_PERIPHERAL_SIZE);
     create_unimplemented_device("nrf52832_soc.comp",
                                 NRF52832_COMP_BASE, NRF52832_PERIPHERAL_SIZE);
     create_unimplemented_device("nrf52832_soc.pwm0",
@@ -340,6 +366,10 @@ static void nrf52832_soc_init(Object *obj)
                                 TYPE_NRF51_TIMER);
 
     }
+
+    object_initialize_child(obj, "rtc0", &s->rtc0, TYPE_NRF_RTC);
+    object_initialize_child(obj, "rtc1", &s->rtc1, TYPE_NRF_RTC);
+    object_initialize_child(obj, "rtc2", &s->rtc2, TYPE_NRF_RTC);
 
     s->sysclk = qdev_init_clock_in(DEVICE(s), "sysclk", NULL, NULL, 0);
 }
