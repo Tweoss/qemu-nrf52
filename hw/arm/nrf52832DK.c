@@ -61,6 +61,20 @@ static void nrf52832DK_init(MachineState *machine)
         qemu_irq int1_line = qdev_get_gpio_in(DEVICE(&s->nrf52832), NRF_GPIO_PIN_MAP(0, 30));
         qdev_connect_gpio_out_named(slave, "INT1", 0, int1_line);
     }
+
+    // MAX11254 (CS pin user activated)
+    {
+        void *ssi_bus = qdev_get_child_bus(DEVICE(&s->nrf52832.spim2), "ssi");
+        assert(ssi_bus);
+        DeviceState * slave = ssi_create_peripheral(ssi_bus, "ssi-lsm6dsox");
+
+        // connect SPI CS line interrupt
+        qemu_irq cs_line = qdev_get_gpio_in(DEVICE(&s->nrf52832), NRF_GPIO_PIN_MAP(0, 31));
+        qdev_connect_gpio_out_named(DEVICE(&s->nrf52832.spim2), "cs_lines", 0, cs_line);
+        // connect DRDY
+        qemu_irq int1_line = qdev_get_gpio_in(DEVICE(&s->nrf52832), NRF_GPIO_PIN_MAP(0, 3));
+        qdev_connect_gpio_out_named(slave, "DRDY", 0, int1_line);
+    }
 }
 
 static void nrf52832DK_machine_class_init(ObjectClass *oc, void *data)

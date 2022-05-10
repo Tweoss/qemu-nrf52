@@ -506,6 +506,7 @@ config MICROBIT
 config NRF52832DK
     bool
     select NRF52832_SOC
+    select MAX11254
 
 config NRF52832_SOC
     bool
