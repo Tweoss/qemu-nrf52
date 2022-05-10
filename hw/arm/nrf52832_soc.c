@@ -90,7 +90,7 @@ static const uint32_t timer__addr[] = {
 #define NRF52832_FLASH_SIZE     (NRF52832_FLASH_PAGES * NRF52832_PAGE_SIZE)
 #define NRF52832_SRAM_SIZE      (NRF52832_SRAM_PAGES * NRF52832_PAGE_SIZE)
 
-#define BASE_TO_IRQ(base)       ((base >> 12) & 0x1F)
+#define BASE_TO_IRQ(base)       ((base >> 12) & 0x3F)
 
 /* HCLK (the main CPU clock) on this SoC is always 64MHz */
 #define HCLK_FRQ 64000000
