@@ -244,9 +244,23 @@ static void nrf52832_soc_realize(DeviceState *dev_soc, Error **errp)
     }
     mr = sysbus_mmio_get_region(SYS_BUS_DEVICE(&s->gpio), 0);
     memory_region_add_subregion_overlap(&s->container, NRF52832_GPIO_BASE, mr, 0);
-
     /* Pass all GPIOs to the SOC layer so they are available to the board */
     qdev_pass_gpios(DEVICE(&s->gpio), dev_soc, NULL);
+
+    /* GPIOTE */
+    if (!sysbus_realize(SYS_BUS_DEVICE(&s->gpiote), errp)) {
+        return;
+    }
+    mr = sysbus_mmio_get_region(SYS_BUS_DEVICE(&s->gpiote), 0);
+    memory_region_add_subregion_overlap(&s->container, NRF52832_GPIOTE_BASE, mr, 0);
+    sysbus_connect_irq(SYS_BUS_DEVICE(&s->gpiote), 0,
+                       qdev_get_gpio_in(DEVICE(&s->armv7m),
+                                        BASE_TO_IRQ(NRF52832_GPIOTE_BASE)));
+    /* Connect GPIO interrupts to the GPIOTE */
+    for (int i = 0; i < NRF52_GPIOTE_PINS; i++) {
+        qemu_irq gpiote_line = qdev_get_gpio_in_named(DEVICE(&s->gpiote), "gpiote", i);
+        qdev_connect_gpio_out_named(DEVICE(&s->gpio), "gpiote", i, gpiote_line);
+    }
 
     /* TIMER */
     for (i = 0; i < NRF52832_NUM_TIMERS; i++) {
@@ -306,18 +320,12 @@ static void nrf52832_soc_realize(DeviceState *dev_soc, Error **errp)
     // peripherals
     create_unimplemented_device("nrf52832_soc.radio",
                                 NRF52832_RADIO_BASE, NRF52832_PERIPHERAL_SIZE);
-    create_unimplemented_device("nrf52832_soc.gpiote",
-                                NRF52832_GPIOTE_BASE, NRF52832_PERIPHERAL_SIZE);
+
     create_unimplemented_device("nrf52832_soc.saadc",
                                 NRF52832_SAADC_BASE, NRF52832_PERIPHERAL_SIZE);
     create_unimplemented_device("nrf52832_soc.wdt",
                                 NRF52832_WDT_BASE, NRF52832_PERIPHERAL_SIZE);
-//    create_unimplemented_device("nrf52832_soc.rtc0",
-//                                NRF52832_RTC0_BASE, NRF52832_PERIPHERAL_SIZE);
-//    create_unimplemented_device("nrf52832_soc.rtc1",
-//                                NRF52832_RTC1_BASE, NRF52832_PERIPHERAL_SIZE);
-//    create_unimplemented_device("nrf52832_soc.rtc2",
-//                                NRF52832_RTC2_BASE, NRF52832_PERIPHERAL_SIZE);
+
     create_unimplemented_device("nrf52832_soc.comp",
                                 NRF52832_COMP_BASE, NRF52832_PERIPHERAL_SIZE);
     create_unimplemented_device("nrf52832_soc.pwm0",
@@ -360,6 +368,8 @@ static void nrf52832_soc_init(Object *obj)
     object_initialize_child(obj, "nvm", &s->nvm, TYPE_NRF51_NVM);
 
     object_initialize_child(obj, "gpio", &s->gpio, TYPE_NRF51_GPIO);
+
+    object_initialize_child(obj, "gpiote", &s->gpiote, TYPE_NRF52_GPIOTE);
 
     for (i = 0; i < NRF52832_NUM_TIMERS; i++) {
         object_initialize_child(obj, "timer[*]", &s->timer[i],

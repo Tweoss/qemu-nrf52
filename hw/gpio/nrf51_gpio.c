@@ -141,27 +141,27 @@ static uint64_t nrf51_gpio_read(void *opaque, hwaddr offset, unsigned int size)
     size_t idx;
 
     switch (offset) {
-    case NRF51_GPIO_REG_OUT ... NRF51_GPIO_REG_OUTCLR:
-        r = s->out;
-        break;
+        case NRF51_GPIO_REG_OUT ... NRF51_GPIO_REG_OUTCLR:
+            r = s->out;
+            break;
 
-    case NRF51_GPIO_REG_IN:
-        r = s->in;
-        break;
+        case NRF51_GPIO_REG_IN:
+            r = s->in;
+            break;
 
-    case NRF51_GPIO_REG_DIR ... NRF51_GPIO_REG_DIRCLR:
-        r = s->dir;
-        break;
+        case NRF51_GPIO_REG_DIR ... NRF51_GPIO_REG_DIRCLR:
+            r = s->dir;
+            break;
 
-    case NRF51_GPIO_REG_CNF_START ... NRF51_GPIO_REG_CNF_END:
-        idx = (offset - NRF51_GPIO_REG_CNF_START) / 4;
-        r = s->cnf[idx];
-        break;
+        case NRF51_GPIO_REG_CNF_START ... NRF51_GPIO_REG_CNF_END:
+            idx = (offset - NRF51_GPIO_REG_CNF_START) / 4;
+            r = s->cnf[idx];
+            break;
 
-    default:
-        qemu_log_mask(LOG_GUEST_ERROR,
-                "%s: bad read offset 0x%" HWADDR_PRIx "\n",
-                      __func__, offset);
+        default:
+            qemu_log_mask(LOG_GUEST_ERROR,
+                          "%s: bad read offset 0x%" HWADDR_PRIx "\n",
+                          __func__, offset);
     }
 
     trace_nrf51_gpio_read(offset, r);
@@ -170,7 +170,7 @@ static uint64_t nrf51_gpio_read(void *opaque, hwaddr offset, unsigned int size)
 }
 
 static void nrf51_gpio_write(void *opaque, hwaddr offset,
-                       uint64_t value, unsigned int size)
+                             uint64_t value, unsigned int size)
 {
     NRF51GPIOState *s = NRF51_GPIO(opaque);
     size_t idx;
@@ -178,58 +178,58 @@ static void nrf51_gpio_write(void *opaque, hwaddr offset,
     trace_nrf51_gpio_write(offset, value);
 
     switch (offset) {
-    case NRF51_GPIO_REG_OUT:
-        s->out = value;
-        break;
+        case NRF51_GPIO_REG_OUT:
+            s->out = value;
+            break;
 
-    case NRF51_GPIO_REG_OUTSET:
-        s->out |= value;
-        break;
+        case NRF51_GPIO_REG_OUTSET:
+            s->out |= value;
+            break;
 
-    case NRF51_GPIO_REG_OUTCLR:
-        s->out &= ~value;
-        break;
+        case NRF51_GPIO_REG_OUTCLR:
+            s->out &= ~value;
+            break;
 
-    case NRF51_GPIO_REG_DIR:
-        s->dir = value;
-        reflect_dir_bit_in_cnf(s);
-        break;
+        case NRF51_GPIO_REG_DIR:
+            s->dir = value;
+            reflect_dir_bit_in_cnf(s);
+            break;
 
-    case NRF51_GPIO_REG_DIRSET:
-        s->dir |= value;
-        reflect_dir_bit_in_cnf(s);
-        break;
+        case NRF51_GPIO_REG_DIRSET:
+            s->dir |= value;
+            reflect_dir_bit_in_cnf(s);
+            break;
 
-    case NRF51_GPIO_REG_DIRCLR:
-        s->dir &= ~value;
-        reflect_dir_bit_in_cnf(s);
-        break;
+        case NRF51_GPIO_REG_DIRCLR:
+            s->dir &= ~value;
+            reflect_dir_bit_in_cnf(s);
+            break;
 
-    case NRF51_GPIO_REG_CNF_START ... NRF51_GPIO_REG_CNF_END:
-        idx = (offset - NRF51_GPIO_REG_CNF_START) / 4;
-        s->cnf[idx] = value;
-        /*
-         * direction is exposed in both the DIR register and the DIR bit
-         * of each PINs CNF configuration register.
-         */
-        s->dir = (s->dir & ~(1UL << idx)) | ((value & 0x01) << idx);
-        break;
+        case NRF51_GPIO_REG_CNF_START ... NRF51_GPIO_REG_CNF_END:
+            idx = (offset - NRF51_GPIO_REG_CNF_START) / 4;
+            s->cnf[idx] = value;
+            /*
+             * direction is exposed in both the DIR register and the DIR bit
+             * of each PINs CNF configuration register.
+             */
+            s->dir = (s->dir & ~(1UL << idx)) | ((value & 0x01) << idx);
+            break;
 
-    default:
-        qemu_log_mask(LOG_GUEST_ERROR,
-                      "%s: bad write offset 0x%" HWADDR_PRIx "\n",
-                      __func__, offset);
+        default:
+            qemu_log_mask(LOG_GUEST_ERROR,
+                          "%s: bad write offset 0x%" HWADDR_PRIx "\n",
+                          __func__, offset);
     }
 
     update_state(s);
 }
 
 static const MemoryRegionOps gpio_ops = {
-    .read =  nrf51_gpio_read,
-    .write = nrf51_gpio_write,
-    .endianness = DEVICE_LITTLE_ENDIAN,
-    .impl.min_access_size = 4,
-    .impl.max_access_size = 4,
+        .read =  nrf51_gpio_read,
+        .write = nrf51_gpio_write,
+        .endianness = DEVICE_LITTLE_ENDIAN,
+        .impl.min_access_size = 4,
+        .impl.max_access_size = 4,
 };
 
 static void nrf51_gpio_set(void *opaque, int line, int value)
@@ -237,6 +237,8 @@ static void nrf51_gpio_set(void *opaque, int line, int value)
     NRF51GPIOState *s = NRF51_GPIO(opaque);
 
     trace_nrf51_gpio_set(line, value);
+
+    //info_report("nrf51.gpio: nrf51_gpio_set %d %d", line, value);
 
     assert(line >= 0 && line < NRF51_GPIO_PINS);
 
@@ -246,6 +248,8 @@ static void nrf51_gpio_set(void *opaque, int line, int value)
     }
 
     update_state(s);
+
+    qemu_set_irq(s->virtual_gpiote[line], value);
 }
 
 static void nrf51_gpio_reset(DeviceState *dev)
@@ -266,19 +270,19 @@ static void nrf51_gpio_reset(DeviceState *dev)
 }
 
 static const VMStateDescription vmstate_nrf51_gpio = {
-    .name = TYPE_NRF51_GPIO,
-    .version_id = 1,
-    .minimum_version_id = 1,
-    .fields = (VMStateField[]) {
-        VMSTATE_UINT32(out, NRF51GPIOState),
-        VMSTATE_UINT32(in, NRF51GPIOState),
-        VMSTATE_UINT32(in_mask, NRF51GPIOState),
-        VMSTATE_UINT32(dir, NRF51GPIOState),
-        VMSTATE_UINT32_ARRAY(cnf, NRF51GPIOState, NRF51_GPIO_PINS),
-        VMSTATE_UINT32(old_out, NRF51GPIOState),
-        VMSTATE_UINT32(old_out_connected, NRF51GPIOState),
-        VMSTATE_END_OF_LIST()
-    }
+        .name = TYPE_NRF51_GPIO,
+        .version_id = 1,
+        .minimum_version_id = 1,
+        .fields = (VMStateField[]) {
+                VMSTATE_UINT32(out, NRF51GPIOState),
+                VMSTATE_UINT32(in, NRF51GPIOState),
+                VMSTATE_UINT32(in_mask, NRF51GPIOState),
+                VMSTATE_UINT32(dir, NRF51GPIOState),
+                VMSTATE_UINT32_ARRAY(cnf, NRF51GPIOState, NRF51_GPIO_PINS),
+                VMSTATE_UINT32(old_out, NRF51GPIOState),
+                VMSTATE_UINT32(old_out_connected, NRF51GPIOState),
+                VMSTATE_END_OF_LIST()
+        }
 };
 
 static void nrf51_gpio_init(Object *obj)
@@ -286,11 +290,12 @@ static void nrf51_gpio_init(Object *obj)
     NRF51GPIOState *s = NRF51_GPIO(obj);
 
     memory_region_init_io(&s->mmio, obj, &gpio_ops, s,
-            TYPE_NRF51_GPIO, NRF51_GPIO_SIZE);
+                          TYPE_NRF51_GPIO, NRF51_GPIO_SIZE);
     sysbus_init_mmio(SYS_BUS_DEVICE(obj), &s->mmio);
 
     qdev_init_gpio_in(DEVICE(s), nrf51_gpio_set, NRF51_GPIO_PINS);
     qdev_init_gpio_out(DEVICE(s), s->output, NRF51_GPIO_PINS);
+    qdev_init_gpio_out_named(DEVICE(s), s->virtual_gpiote, "gpiote", NRF51_GPIO_PINS);
 }
 
 static void nrf51_gpio_class_init(ObjectClass *klass, void *data)
@@ -303,11 +308,11 @@ static void nrf51_gpio_class_init(ObjectClass *klass, void *data)
 }
 
 static const TypeInfo nrf51_gpio_info = {
-    .name = TYPE_NRF51_GPIO,
-    .parent = TYPE_SYS_BUS_DEVICE,
-    .instance_size = sizeof(NRF51GPIOState),
-    .instance_init = nrf51_gpio_init,
-    .class_init = nrf51_gpio_class_init
+        .name = TYPE_NRF51_GPIO,
+        .parent = TYPE_SYS_BUS_DEVICE,
+        .instance_size = sizeof(NRF51GPIOState),
+        .instance_init = nrf51_gpio_init,
+        .class_init = nrf51_gpio_class_init
 };
 
 static void nrf51_gpio_register_types(void)
@@ -316,3 +321,4 @@ static void nrf51_gpio_register_types(void)
 }
 
 type_init(nrf51_gpio_register_types)
+

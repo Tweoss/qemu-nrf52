@@ -10,6 +10,7 @@
 #include "hw/qdev-properties.h"
 #include "qom/object.h"
 #include "hw/ssi/ssi.h"
+#include "hw/i2c/i2c.h"
 
 struct nrf52832DKMachineState {
     MachineState parent;
@@ -38,16 +39,27 @@ static void nrf52832DK_init(MachineState *machine)
 
     // SD card
     {
-        void *bus;
-        DeviceState *carddev;
-
-        bus = qdev_get_child_bus(DEVICE(&s->nrf52832.spim0_twim0), "ssi");
-        assert(bus);
-        carddev = ssi_create_peripheral(bus, "ssi-sd");
+        void *ssi_bus = qdev_get_child_bus(DEVICE(&s->nrf52832.spim0_twim0), "ssi");
+        assert(ssi_bus);
+        DeviceState *carddev = ssi_create_peripheral(ssi_bus, "ssi-sd");
 
         // Connect CS
         qemu_irq line = qdev_get_gpio_in_named(carddev, SSI_GPIO_CS, 0);
         qdev_connect_gpio_out_named(DEVICE(&s->nrf52832.spim0_twim0), "cs_lines", 0, line);
+    }
+
+    // LSM6 (CS pin SPI-activated)
+    {
+        void *ssi_bus = qdev_get_child_bus(DEVICE(&s->nrf52832.spim1_twim1), "ssi");
+        assert(ssi_bus);
+        DeviceState * slave = ssi_create_peripheral(ssi_bus, "ssi-lsm6dsox");
+
+        // connect SPI CS line interrupt
+        qemu_irq cs_line = qdev_get_gpio_in_named(slave, SSI_GPIO_CS, 0);
+        qdev_connect_gpio_out_named(DEVICE(&s->nrf52832.spim1_twim1), "cs_lines", 0, cs_line);
+        // connect INT1
+        qemu_irq int1_line = qdev_get_gpio_in(DEVICE(&s->nrf52832), NRF_GPIO_PIN_MAP(0, 30));
+        qdev_connect_gpio_out_named(slave, "INT1", 0, int1_line);
     }
 }
 

@@ -40,14 +40,16 @@ REG32(GPIOTE_INTENSET, 0x304)
 REG32(GPIOTE_INTENCLR, 0x308)
 
 REG32(GPIOTE_CONFIG_0, 0x510)
+    FIELD(GPIOTE_CONFIG_0, MODE, 0, 2)
+    FIELD(GPIOTE_CONFIG_0, PIN, 8, 5)
+    FIELD(GPIOTE_CONFIG_0, POL, 16, 2)
+    FIELD(GPIOTE_CONFIG_0, INIT, 20, 1)
 
 struct NRF52GPIOTEState {
     SysBusDevice parent_obj;
 
     MemoryRegion mmio;
     qemu_irq irq;
-
-    qemu_irq pins[NRF52_GPIOTE_PINS];
 
     uint32_t regs[NRF52832_GPIOTE_PER_SIZE];
 };

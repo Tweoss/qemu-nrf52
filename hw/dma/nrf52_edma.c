@@ -326,7 +326,7 @@ static void nrf52832_edma_realize(DeviceState *dev, Error **errp)
 
 //    ssi_auto_connect_slaves();
 
-    qdev_init_gpio_out_named(dev, s->cs_lines, "cs_lines",NUM_SPI_SLAVES);
+    qdev_init_gpio_out_named(dev, s->cs_lines, "cs_lines", NUM_SPI_SLAVES);
 }
 
 static void nrf52832_edma_init(Object *obj)
