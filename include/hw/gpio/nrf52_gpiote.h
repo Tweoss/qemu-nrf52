@@ -1,0 +1,55 @@
+//
+// Created by vince on 10/05/2022.
+//
+
+#ifndef QEMU_NRF52_NRF52_GPIOTE_H
+#define QEMU_NRF52_NRF52_GPIOTE_H
+
+#include "hw/sysbus.h"
+#include "qom/object.h"
+#include "hw/registerfields.h"
+
+#define TYPE_NRF52_GPIOTE "nrf52_soc.gpiote"
+OBJECT_DECLARE_SIMPLE_TYPE(NRF52GPIOTEState, NRF52_GPIOTE)
+
+#define NRF52_GPIOTE_PINS 32
+
+#define NRF52832_GPIOTE_PER_SIZE 0x600
+
+REG32(GPIOTE_TASKS_OUT_0, 0x000)
+
+REG32(GPIOTE_TASKS_SET_0, 0x030)
+
+REG32(GPIOTE_TASKS_CLR_0, 0x060)
+
+REG32(GPIOTE_EVENTS_IN_0, 0x100)
+
+REG32(GPIOTE_EVENTS_PORT, 0x17C)
+
+REG32(GPIOTE_INTEN, 0x300) // fake register
+    FIELD(GPIOTE_INTEN, IN_0, 0, 1)
+    FIELD(GPIOTE_INTEN, IN_1, 1, 1)
+    FIELD(GPIOTE_INTEN, IN_2, 2, 1)
+    FIELD(GPIOTE_INTEN, IN_3, 3, 1)
+    FIELD(GPIOTE_INTEN, IN_4, 4, 1)
+    FIELD(GPIOTE_INTEN, IN_5, 5, 1)
+    FIELD(GPIOTE_INTEN, IN_6, 6, 1)
+    FIELD(GPIOTE_INTEN, IN_7, 7, 1)
+    FIELD(GPIOTE_INTEN, PORT, 31, 1)
+REG32(GPIOTE_INTENSET, 0x304)
+REG32(GPIOTE_INTENCLR, 0x308)
+
+REG32(GPIOTE_CONFIG_0, 0x510)
+
+struct NRF52GPIOTEState {
+    SysBusDevice parent_obj;
+
+    MemoryRegion mmio;
+    qemu_irq irq;
+
+    qemu_irq pins[NRF52_GPIOTE_PINS];
+
+    uint32_t regs[NRF52832_GPIOTE_PER_SIZE];
+};
+
+#endif //QEMU_NRF52_NRF52_GPIOTE_H
