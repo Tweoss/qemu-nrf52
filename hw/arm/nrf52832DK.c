@@ -12,6 +12,12 @@
 #include "hw/ssi/ssi.h"
 #include "hw/i2c/i2c.h"
 
+#define MAX_DRDY1             NRF_GPIO_PIN_MAP(0, 3)
+#define MAX_DRDY2             NRF_GPIO_PIN_MAP(0, 7)
+
+#define MAX_SS1_PIN           NRF_GPIO_PIN_MAP(0, 31)
+#define MAX_SS2_PIN           NRF_GPIO_PIN_MAP(0, 30)
+
 struct nrf52832DKMachineState {
     MachineState parent;
 
@@ -66,14 +72,32 @@ static void nrf52832DK_init(MachineState *machine)
     {
         void *ssi_bus = qdev_get_child_bus(DEVICE(&s->nrf52832.spim2), "ssi");
         assert(ssi_bus);
-        DeviceState * slave = ssi_create_peripheral(ssi_bus, "ssi-lsm6dsox");
+        DeviceState *dev = qdev_new("ssi-max11254");
+        qdev_prop_set_uint8(dev, "ID", 0);
+        ssi_realize_and_unref(dev, ssi_bus, &error_fatal);
 
         // connect SPI CS line interrupt
-        qemu_irq cs_line = qdev_get_gpio_in(DEVICE(&s->nrf52832), NRF_GPIO_PIN_MAP(0, 31));
-        qdev_connect_gpio_out_named(DEVICE(&s->nrf52832.spim2), "cs_lines", 0, cs_line);
+        qemu_irq cs_line = qdev_get_gpio_in_named(dev, SSI_GPIO_CS, 0);
+        qdev_connect_gpio_out(DEVICE(&s->nrf52832), MAX_SS1_PIN, cs_line);
         // connect DRDY
-        qemu_irq int1_line = qdev_get_gpio_in(DEVICE(&s->nrf52832), NRF_GPIO_PIN_MAP(0, 3));
-        qdev_connect_gpio_out_named(slave, "DRDY", 0, int1_line);
+        qemu_irq int1_line = qdev_get_gpio_in(DEVICE(&s->nrf52832), MAX_DRDY1);
+        qdev_connect_gpio_out_named(dev, "DRDY", 0, int1_line);
+    }
+
+    // MAX11254 (CS pin user activated)
+    {
+        void *ssi_bus = qdev_get_child_bus(DEVICE(&s->nrf52832.spim2), "ssi");
+        assert(ssi_bus);
+        DeviceState *dev = qdev_new("ssi-max11254");
+        qdev_prop_set_uint8(dev, "ID", 1);
+        ssi_realize_and_unref(dev, ssi_bus, &error_fatal);
+
+        // connect SPI CS line interrupt
+        qemu_irq cs_line = qdev_get_gpio_in_named(dev, SSI_GPIO_CS, 0);
+        qdev_connect_gpio_out(DEVICE(&s->nrf52832), MAX_SS2_PIN, cs_line);
+        // connect DRDY
+        qemu_irq int1_line = qdev_get_gpio_in(DEVICE(&s->nrf52832), MAX_DRDY2);
+        qdev_connect_gpio_out_named(dev, "DRDY", 0, int1_line);
     }
 }
 

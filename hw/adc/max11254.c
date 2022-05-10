@@ -9,6 +9,7 @@
 #include "ui/console.h"
 #include "hw/registerfields.h"
 #include "hw/ptimer.h"
+#include "hw/qdev-properties.h"
 
 
 #define TYPE_SSI_MAX11254 "ssi-max11254"
@@ -20,6 +21,8 @@ struct ssi_max11254_state {
     qemu_irq int1[1];
 
     ptimer_state *ptimer;
+
+    uint8_t id;
 
     int cur_xfer_pos;
 
@@ -48,18 +51,14 @@ static uint32_t _transfer(SSIPeripheral *dev, uint32_t value)
 
     const uint8_t value8 = value & 0xFFu;
 
-    //info_report("MAX byte: [value: 0x%02X]", value8);
+    info_report("MAX#%u byte: [value: 0x%02X]", s->id, value8);
 
     if (s->cur_xfer_pos == 0) {
-
-        //info_report("MAX cmd: [value: 0x%02X]", value8);
 
         s->cmd = value8 & 0x7F;
         s->is_read = (value8 & 0x80) ? true:false;
 
     } else if (s->cur_xfer_pos == 1) {
-
-        //info_report("MAX byte: [value: 0x%02X]", value8);
 
         if (s->is_read) {
 
@@ -88,6 +87,8 @@ static int _set_cs(SSIPeripheral *dev, bool select) {
 
     // called when the state of the CS line changes
     ssi_max11254_state *s = SSI_MAX11254(dev);
+
+    info_report("MAX#%u CS %d", s->id, select);
 
     if (select) { // select true = cs high
     }
@@ -149,6 +150,11 @@ static void max11254_instance_init(Object *obj)
     vmstate_register(NULL, 0, &vmstate_ssi_max11254, s);
 }
 
+static Property _properties[] = {
+        DEFINE_PROP_UINT8("ID", ssi_max11254_state, id, 0),
+        DEFINE_PROP_END_OF_LIST(),
+};
+
 static void max11254_class_init(ObjectClass *klass, void *data)
 {
     DeviceClass *dc = DEVICE_CLASS(klass);
@@ -162,6 +168,8 @@ static void max11254_class_init(ObjectClass *klass, void *data)
     dc->reset = ssi_max11254_reset;
     /* Reason: init() method uses drive_get_next() */
     dc->user_creatable = false;
+
+    device_class_set_props(dc, _properties);
 }
 
 static const TypeInfo max11254_info = {
