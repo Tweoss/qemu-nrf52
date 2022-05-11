@@ -89,7 +89,7 @@ static uint32_t _transfer(SSIPeripheral *dev, uint32_t value)
                 ptimer_set_freq(s->ptimer, 1000+s->id); // TODO Rate_9 = 1.3ms conversion time ?
                 ptimer_set_count(s->ptimer, 13);
                 ptimer_set_limit(s->ptimer, 13, 13);
-                ptimer_run(s->ptimer, mode == 1);
+                ptimer_run(s->ptimer, mode != 3);
                 ptimer_transaction_commit(s->ptimer);
             }
         }
