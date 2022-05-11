@@ -70,7 +70,7 @@ static uint32_t _transfer(SSIPeripheral *dev, uint32_t value)
 
     const uint8_t value8 = value & 0xFFu;
 
-    info_report("MAX#%u byte: [value: 0x%02X] (pos=%u)", s->id, value8, s->cur_xfer_pos);
+    //info_report("MAX#%u byte: [value: 0x%02X] (pos=%u)", s->id, value8, s->cur_xfer_pos);
 
     if (s->cur_xfer_pos == 0) {
 
@@ -83,11 +83,10 @@ static uint32_t _transfer(SSIPeripheral *dev, uint32_t value)
             uint8_t mode = s->cmd & R_MAX_CONV_MODE_MASK;
             mode >>= R_MAX_CONV_MODE_SHIFT;
             info_report("MAX#%u SEQ: [value: 0x%02X] mode=%u", s->id, value8, mode);
-            if (!s->is_timer_running) {
-                s->is_timer_running = mode == 3 ? true : false;
+            if (mode) {
                 ptimer_transaction_begin(s->ptimer);
                 ptimer_stop(s->ptimer);
-                ptimer_set_freq(s->ptimer, 10000); // Rate_9 = 1.3ms conversion time ?
+                ptimer_set_freq(s->ptimer, 1000+s->id); // TODO Rate_9 = 1.3ms conversion time ?
                 ptimer_set_count(s->ptimer, 13);
                 ptimer_set_limit(s->ptimer, 13, 13);
                 ptimer_run(s->ptimer, mode == 1);
@@ -125,7 +124,7 @@ static int _set_cs(SSIPeripheral *dev, bool select) {
     // called when the state of the CS line changes
     ssi_max11254_state *s = SSI_MAX11254(dev);
 
-    info_report("MAX#%u CS %d", s->id, select);
+    //info_report("MAX#%u CS %d", s->id, select);
 
     if (select) { // select true = cs high
     }
@@ -143,7 +142,7 @@ static void timer_hit(void *opaque)
 {
     struct ssi_max11254_state *s = opaque;
 
-    info_report("MAX#%u DRDY", s->id);
+    //info_report("MAX#%u DRDY", s->id);
 
     // toggle irq
     qemu_set_irq(s->int1[0], true);
