@@ -11,6 +11,7 @@
 #include "qom/object.h"
 #include "hw/ssi/ssi.h"
 #include "hw/i2c/i2c.h"
+#include "hw/arm/z_model.h"
 
 #define MAX_DRDY1             NRF_GPIO_PIN_MAP(0, 3)
 #define MAX_DRDY2             NRF_GPIO_PIN_MAP(0, 7)
@@ -54,11 +55,16 @@ static void nrf52832DK_init(MachineState *machine)
         qdev_connect_gpio_out_named(DEVICE(&s->nrf52832.spim0_twim0), "cs_lines", 0, line);
     }
 
+    DeviceState *model = qdev_new(TYPE_ZMODEL);
+
     // LSM6 (CS pin SPI-activated)
     {
         void *ssi_bus = qdev_get_child_bus(DEVICE(&s->nrf52832.spim1_twim1), "ssi");
         assert(ssi_bus);
-        DeviceState * slave = ssi_create_peripheral(ssi_bus, "ssi-lsm6dsox");
+        DeviceState *slave = qdev_new("ssi-lsm6dsox");
+        object_property_set_link(OBJECT(slave), "model",
+                                 OBJECT(model), &error_fatal);
+        ssi_realize_and_unref(slave, ssi_bus, &error_fatal);
 
         // connect SPI CS line interrupt
         qemu_irq cs_line = qdev_get_gpio_in_named(slave, SSI_GPIO_CS, 0);

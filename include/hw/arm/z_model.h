@@ -1,0 +1,35 @@
+
+#ifndef QEMU_NRF52_Z_MODEL_H
+#define QEMU_NRF52_Z_MODEL_H
+
+
+#include "hw/sysbus.h"
+#include "qemu/timer.h"
+#include "qom/object.h"
+#include "hw/registerfields.h"
+
+
+#define TYPE_ZMODEL "z-model"
+OBJECT_DECLARE_SIMPLE_TYPE(z_model_state, ZMODEL)
+
+
+struct z_model_state {
+    SSIPeripheral parent_obj;
+
+    bool running;
+    int64_t timer_start_ns;
+    int64_t update_counter_ns;
+    uint32_t counter;
+
+    uint8_t id;
+
+};
+
+typedef struct {
+    int32_t acc_mg[3];
+    int32_t gyr_mrad_s[3];
+} z_model_acc;
+
+void z_model__compute_acc(z_model_state *s, z_model_acc *p_acc);
+
+#endif //QEMU_NRF52_Z_MODEL_H

@@ -9,10 +9,15 @@
 #include "ui/console.h"
 #include "hw/registerfields.h"
 #include "hw/ptimer.h"
+#include "hw/arm/z_model.h"
+#include "hw/qdev-properties.h"
 
 
 #define TYPE_SSI_LSM "ssi-lsm6dsox"
 OBJECT_DECLARE_SIMPLE_TYPE(ssi_dsox_state, SSI_LSM)
+
+#define FIFO_SIZE      512
+#define FIFO_MASK_SIZE 0x1FF
 
 struct ssi_dsox_state {
     SSIPeripheral parent_obj;
@@ -30,17 +35,30 @@ struct ssi_dsox_state {
 
     uint8_t regs[0xFF];
 
+    uint32_t read_level;
+    uint32_t fifo_level;
+    uint32_t fifo_diff;
+    z_model_acc fifo_buffer[FIFO_SIZE];
+
+    z_model_state *p_model;
 };
+
+
+#define LSM6DSOX_CTRL1_XL                     0x10U
 
 REG8(LSM_INT1_CTRL, 0x0D)
     FIELD(LSM_INT1_CTRL, FIFO, 3, 3)
 REG8(LSM_WHO_AM_I, 0x0F)
+REG8(LSM_CTRL1_XL, (0x10U & 0x7F))
+    FIELD(LSM_CTRL1_XL, ODR, 4, 4)
 
+REG8(LSM_FIFO1_STATUS, (0xBA & 0x7F))
+REG8(LSM_FIFO2_STATUS, (0xBB & 0x7F))
+REG8(LSM_FIFO_DATA_OUT_TAG, (0xF8 & 0x7F))
+REG8(LSM_FIFO_DATA_OUT_XL, (0xF9 & 0x7F))
+
+#define LSM6DSOX_FIFO_DATA_OUT_TAG            0x78U
 REG8(LSM_XXX, (0x88 & 0x7F))
-REG8(LSM_XX1, (0xBA & 0x7F))
-REG8(LSM_XX2, (0xBB & 0x7F))
-REG8(LSM_YYY, (0xF8 & 0x7F))
-REG8(LSM_ZZZ, (0xF9 & 0x7F)) // TODO
 
 static uint32_t _transfer(SSIPeripheral *dev, uint32_t value)
 {
@@ -69,6 +87,17 @@ static uint32_t _transfer(SSIPeripheral *dev, uint32_t value)
                 case A_LSM_WHO_AM_I:
                     s->rsp_buffer[0] = 0x6C;
                     break;
+                case A_LSM_FIFO1_STATUS:
+                    s->rsp_buffer[0] = s->fifo_diff & 0xFF;
+                    break;
+                case A_LSM_FIFO2_STATUS:
+                    s->rsp_buffer[0] = ((s->fifo_diff & 0x0300) >> 8) & 0xFF;
+                    break;
+                case A_LSM_FIFO_DATA_OUT_TAG:
+                    memcpy(s->rsp_buffer, &s->fifo_buffer[s->read_level], sizeof(z_model_acc));
+                    s->read_level += 1;
+                    s->read_level &= FIFO_MASK_SIZE;
+                    break;
                 default:
                     ret = s->regs[s->cmd];
                     break;
@@ -76,15 +105,15 @@ static uint32_t _transfer(SSIPeripheral *dev, uint32_t value)
         } else {
             s->regs[s->cmd] = value8;
 
-            if (s->cmd == A_LSM_INT1_CTRL && (value8 & R_LSM_INT1_CTRL_FIFO_MASK) && !s->is_timer_running) {
+            if (s->cmd == A_LSM_CTRL1_XL && (value8 & R_LSM_CTRL1_XL_ODR_MASK) && !s->is_timer_running) {
 
                 s->is_timer_running = true;
 
                 ptimer_transaction_begin(s->ptimer);
                 ptimer_stop(s->ptimer);
-                ptimer_set_freq(s->ptimer, 1000);
-                ptimer_set_count(s->ptimer, 500); // TODO change
-                ptimer_set_limit(s->ptimer, 500, 500);
+                ptimer_set_freq(s->ptimer, 1666);
+                ptimer_set_count(s->ptimer, 1);
+                ptimer_set_limit(s->ptimer, 1, 1);
                 ptimer_run(s->ptimer, 0);
                 ptimer_transaction_commit(s->ptimer);
             }
@@ -137,9 +166,19 @@ static void timer_hit(void *opaque)
 {
     struct ssi_dsox_state *s = opaque;
 
-    qemu_set_irq(s->int1[0], true);
+    z_model__compute_acc(s->p_model, &s->fifo_buffer[s->fifo_level]);
 
-    //info_report("LSM timer_hit");
+    s->fifo_level += 1;
+    s->fifo_level = s->fifo_level & FIFO_MASK_SIZE;
+
+    s->fifo_diff = s->fifo_level - s->read_level;
+
+    if (s->fifo_level > 16) { // watermark
+        qemu_set_irq(s->int1[0], true);
+    } else {
+        qemu_set_irq(s->int1[0], false);
+    }
+
 }
 
 static void lsm6dsox_realize(SSIPeripheral *d, Error **errp)
@@ -165,6 +204,12 @@ static void lsm6dsox_instance_init(Object *obj)
     vmstate_register(NULL, 0, &vmstate_ssi_lsm6dsox, s);
 }
 
+static Property _properties[] = {
+        DEFINE_PROP_LINK("model", ssi_dsox_state, p_model,
+                         TYPE_ZMODEL, z_model_state *),
+        DEFINE_PROP_END_OF_LIST(),
+};
+
 static void lsm6dsox_class_init(ObjectClass *klass, void *data)
 {
     DeviceClass *dc = DEVICE_CLASS(klass);
@@ -176,8 +221,8 @@ static void lsm6dsox_class_init(ObjectClass *klass, void *data)
     k->set_cs = _set_cs;
     dc->vmsd = &vmstate_ssi_lsm6dsox;
     dc->reset = ssi_lsm6dsox_reset;
-    /* Reason: init() method uses drive_get_next() */
-    dc->user_creatable = false;
+
+    device_class_set_props(dc, _properties);
 }
 
 static const TypeInfo lsm6dsox_info = {
