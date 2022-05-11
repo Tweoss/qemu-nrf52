@@ -90,21 +90,20 @@ static void nrf52_gpiote_set(void *opaque, int line, int value)
             if (pin == line && mode == 1) { // event mode
                 if ((pol & 0b01) && value) { // LowToHigh
                     irq_level = true;
-                    s->regs[R_GPIOTE_EVENTS_IN_0+1] = 1;
                 }
                 if ((pol & 0b10) && !value) { // HighToLow
                     irq_level = true;
-                    s->regs[R_GPIOTE_EVENTS_IN_0+1] = 1;
                 }
                 if (irq_level) {
-                    info_report("nrf52.gpiote INT mode: %u pin: %u pol %u (port %d)", mode, pin, pol, i);
+                    s->regs[R_GPIOTE_EVENTS_IN_0+i] = 1;
+                    //info_report("nrf52.gpiote INT mode: %u pin: %u pol %u (port %d)", mode, pin, pol, i);
+                    qemu_set_irq(s->irq, irq_level);
+                    qemu_set_irq(s->irq, false);
                 }
             }
         }
     }
 
-    qemu_set_irq(s->irq, irq_level);
-    qemu_set_irq(s->irq, false);
 }
 
 static void nrf52_gpiote_reset(DeviceState *dev)
