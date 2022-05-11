@@ -40,6 +40,8 @@ struct ssi_dsox_state {
     uint8_t fifo_diff;
     z_model_acc fifo_buffer[FIFO_SIZE];
 
+    bool uses_int1;
+
     z_model_state *p_model;
 };
 
@@ -116,8 +118,11 @@ static uint32_t _transfer(SSIPeripheral *dev, uint32_t value)
                 ptimer_run(s->ptimer, 0);
                 ptimer_transaction_commit(s->ptimer);
             }
-        }
 
+            if (s->cmd == A_LSM_INT1_CTRL) {
+                s->uses_int1 = (value8 & R_LSM_INT1_CTRL_FIFO_MASK) ? true : false;
+            }
+        }
     }
 
     if (s->cur_xfer_pos >= 1) {
@@ -171,7 +176,7 @@ static void timer_hit(void *opaque)
     s->fifo_level += 1;
     s->fifo_diff = s->fifo_level - s->read_level;
 
-    if (s->fifo_level > 16) { // watermark
+    if (s->uses_int1 && s->fifo_level > 16) { // watermark
         qemu_set_irq(s->int1[0], true);
     } else {
         qemu_set_irq(s->int1[0], false);

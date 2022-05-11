@@ -80,6 +80,8 @@ static void nrf52832DK_init(MachineState *machine)
         assert(ssi_bus);
         DeviceState *dev = qdev_new("ssi-max11254");
         qdev_prop_set_uint8(dev, "ID", 0);
+        object_property_set_link(OBJECT(dev), "model",
+                                 OBJECT(model), &error_fatal);
         ssi_realize_and_unref(dev, ssi_bus, &error_fatal);
 
         // connect SPI CS line interrupt
@@ -96,6 +98,8 @@ static void nrf52832DK_init(MachineState *machine)
         assert(ssi_bus);
         DeviceState *dev = qdev_new("ssi-max11254");
         qdev_prop_set_uint8(dev, "ID", 1);
+        object_property_set_link(OBJECT(dev), "model",
+                                 OBJECT(model), &error_fatal);
         ssi_realize_and_unref(dev, ssi_bus, &error_fatal);
 
         // connect SPI CS line interrupt
