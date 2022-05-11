@@ -75,31 +75,36 @@ static void nrf52_gpiote_set(void *opaque, int line, int value)
 
     bool irq_level = false;
 
-    if (s->regs[R_GPIOTE_INTEN] & R_GPIOTE_INTEN_IN_0_MASK) {
-        uint32_t mode = (s->regs[R_GPIOTE_CONFIG_0] & R_GPIOTE_CONFIG_0_MODE_MASK)
-                >> R_GPIOTE_CONFIG_0_MODE_SHIFT;
-        uint32_t pin = (s->regs[R_GPIOTE_CONFIG_0] & R_GPIOTE_CONFIG_0_PIN_MASK)
-                >> R_GPIOTE_CONFIG_0_PIN_SHIFT;
-        uint32_t pol = (s->regs[R_GPIOTE_CONFIG_0] & R_GPIOTE_CONFIG_0_POL_MASK)
-                >> R_GPIOTE_CONFIG_0_POL_SHIFT;
+    for (int i=0; i< NRF52_GPIOTE_CFG_NB; i++) {
 
-        //info_report("nrf52.gpiote: mode: %u pin: %u pol %u", mode, pin, pol);
+        if (s->regs[R_GPIOTE_INTEN] & (1 << i)) {
+            uint32_t mode = (s->regs[R_GPIOTE_CONFIG_0+i] & R_GPIOTE_CONFIG_0_MODE_MASK)
+                    >> R_GPIOTE_CONFIG_0_MODE_SHIFT;
+            uint32_t pin = (s->regs[R_GPIOTE_CONFIG_0+i] & R_GPIOTE_CONFIG_0_PIN_MASK)
+                    >> R_GPIOTE_CONFIG_0_PIN_SHIFT;
+            uint32_t pol = (s->regs[R_GPIOTE_CONFIG_0+i] & R_GPIOTE_CONFIG_0_POL_MASK)
+                    >> R_GPIOTE_CONFIG_0_POL_SHIFT;
 
-        if (pin == line && mode == 1) { // event mode
-            if (pol & 0b01 && value) { // LowToHigh
-                irq_level = true;
-                s->regs[R_GPIOTE_EVENTS_IN_0] = 1;
-            }
-            if (pol & 0b10 && !value) { // HighToLow
-                irq_level = true;
-                s->regs[R_GPIOTE_EVENTS_IN_0] = 1;
+            //info_report("nrf52.gpiote: mode: %u pin: %u pol %u", mode, pin, pol);
+
+            if (pin == line && mode == 1) { // event mode
+                if ((pol & 0b01) && value) { // LowToHigh
+                    irq_level = true;
+                    s->regs[R_GPIOTE_EVENTS_IN_0+1] = 1;
+                }
+                if ((pol & 0b10) && !value) { // HighToLow
+                    irq_level = true;
+                    s->regs[R_GPIOTE_EVENTS_IN_0+1] = 1;
+                }
+                if (irq_level) {
+                    info_report("nrf52.gpiote INT mode: %u pin: %u pol %u (port %d)", mode, pin, pol, i);
+                }
             }
         }
     }
 
-    // TODO others
-
     qemu_set_irq(s->irq, irq_level);
+    qemu_set_irq(s->irq, false);
 }
 
 static void nrf52_gpiote_reset(DeviceState *dev)
