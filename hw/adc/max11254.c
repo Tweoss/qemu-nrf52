@@ -28,7 +28,7 @@ struct ssi_max11254_state {
     int cur_xfer_pos;
 
     uint8_t cmd;
-    bool is_read;
+    bool is_register;
     bool is_timer_running;
     uint8_t rsp_buffer[16];
 
@@ -51,10 +51,17 @@ struct ssi_max11254_state {
 #define RATE_9              0x09
 
 
-REG8(MAX_SEQ, (COMMAND_SEQ | RATE_9))
-REG8(MAX_READ, (REGISTER_BYTE | REGISTER_READ | DATA0_ADDR))
+REG8(MAX_SEQ, COMMAND_SEQ)
+    FIELD(MAX_SEQ, MODE, 3, 2)
+REG8(MAX_READ, DATA0_ADDR)
 
-FIELD(MAX, CMD, 3, 5)
+FIELD(MAX_CONV, RATE, 0, 4)
+FIELD(MAX_CONV, MODE, 5, 2)
+
+FIELD(MAX_REG, RW, 0, 1)
+FIELD(MAX_REG, ADDR, 1, 5)
+
+FIELD(MAX_CMD, B6, 6, 1)
 
 static uint32_t _transfer(SSIPeripheral *dev, uint32_t value)
 {
@@ -63,40 +70,43 @@ static uint32_t _transfer(SSIPeripheral *dev, uint32_t value)
 
     const uint8_t value8 = value & 0xFFu;
 
-    info_report("MAX#%u byte: [value: 0x%02X]", s->id, value8);
+    info_report("MAX#%u byte: [value: 0x%02X] (pos=%u)", s->id, value8, s->cur_xfer_pos);
 
     if (s->cur_xfer_pos == 0) {
 
-        s->cmd = value8 & R_MAX_CMD_MASK;
-        s->is_read = (value8 & REGISTER_READ) ? true:false;
+        s->cmd = value8;
+        s->is_register = (value8 & R_MAX_CMD_B6_MASK) ? true:false;
+
+        if (!s->is_register) {
+
+            // conversion
+            uint8_t mode = s->cmd & R_MAX_CONV_MODE_MASK;
+            mode >>= R_MAX_CONV_MODE_SHIFT;
+            info_report("MAX#%u SEQ: [value: 0x%02X] mode=%u", s->id, value8, mode);
+            if (!s->is_timer_running) {
+                s->is_timer_running = mode == 3 ? true : false;
+                ptimer_transaction_begin(s->ptimer);
+                ptimer_stop(s->ptimer);
+                ptimer_set_freq(s->ptimer, 10000); // Rate_9 = 1.3ms conversion time ?
+                ptimer_set_count(s->ptimer, 13);
+                ptimer_set_limit(s->ptimer, 13, 13);
+                ptimer_run(s->ptimer, mode == 1);
+                ptimer_transaction_commit(s->ptimer);
+            }
+        }
 
     } else if (s->cur_xfer_pos == 1) {
 
-        // prepare answer
-        switch (s->cmd) {
-            case A_MAX_SEQ:
-                if (!s->is_timer_running) {
-                    s->is_timer_running = true;
-                    ptimer_transaction_begin(s->ptimer);
-                    ptimer_stop(s->ptimer);
-                    ptimer_set_freq(s->ptimer, 10); // TODO set freq
-                    ptimer_set_count(s->ptimer, 1);
-                    ptimer_set_limit(s->ptimer, 1, 1);
-                    ptimer_run(s->ptimer, 0);
-                    ptimer_transaction_commit(s->ptimer);
-                } break;
-            case A_MAX_READ:
-                // TODO
-                break;
-            default:
-                ret = s->regs[s->cmd];
-                break;
-        }
+        if (s->is_register) {
 
-        if (s->is_read) {
+            if (s->cmd & R_MAX_REG_RW_MASK) {
+                // read
+                ret = s->regs[s->cmd & R_MAX_REG_ADDR_MASK];
+            } else {
+                // write
+                s->regs[s->cmd & R_MAX_REG_ADDR_MASK] = value8;
+            }
 
-        } else {
-            s->regs[s->cmd] = value8;
         }
 
     }
@@ -121,12 +131,23 @@ static int _set_cs(SSIPeripheral *dev, bool select) {
     }
 
     s->cmd = 0;
-    s->is_read = true;
+    s->is_register = true;
     memset(s->rsp_buffer, 0, sizeof(s->rsp_buffer));
 
     s->cur_xfer_pos = 0;
 
     return 0;
+}
+
+static void timer_hit(void *opaque)
+{
+    struct ssi_max11254_state *s = opaque;
+
+    info_report("MAX#%u DRDY", s->id);
+
+    // toggle irq
+    qemu_set_irq(s->int1[0], true);
+    qemu_set_irq(s->int1[0], false);
 }
 
 static int max11254_post_load(void *opaque, int version_id)
@@ -144,15 +165,6 @@ static const VMStateDescription vmstate_ssi_max11254 = {
                 VMSTATE_END_OF_LIST()
         },
 };
-
-static void timer_hit(void *opaque)
-{
-    struct ssi_max11254_state *s = opaque;
-
-    // toggle irq
-    qemu_set_irq(s->int1[0], true);
-    qemu_set_irq(s->int1[0], false);
-}
 
 static void max11254_realize(SSIPeripheral *d, Error **errp)
 {
