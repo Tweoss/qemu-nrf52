@@ -16,10 +16,10 @@ void z_model__compute_acc(z_model_state *s, z_model_acc *p_acc)
     // TODO int64_t now = qemu_clock_get_us(QEMU_CLOCK_VIRTUAL);
 }
 
-void z_model__compute_adc(z_model_state *s, uint8_t id, z_model_adc *p_adc) {
-    // TODO
+void z_model__compute_adc(z_model_state *s, uint8_t id, z_model_adc *p_adc)
+{
+    // TODO int64_t now = qemu_clock_get_us(QEMU_CLOCK_VIRTUAL);
 }
-
 
 static int max11254_post_load(void *opaque, int version_id)
 {

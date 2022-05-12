@@ -25,8 +25,8 @@ struct z_model_state {
 };
 
 typedef struct {
-    int32_t acc_mg[3];
-    int32_t gyr_mrad_s[3];
+    int16_t acc_mg[3];
+    int16_t gyr_mrad_s[3];
 } z_model_acc;
 
 typedef struct {
