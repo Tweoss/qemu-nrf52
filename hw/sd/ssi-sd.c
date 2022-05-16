@@ -41,6 +41,7 @@ do { fprintf(stderr, "ssi_sd: error: " fmt , ## __VA_ARGS__);} while (0)
 
 typedef enum {
     SSI_SD_CMD = 0,
+    SSI_SD_DUMMY,
     SSI_SD_CMDARG,
     SSI_SD_CMDCRC,
     SSI_SD_PREP_RESP,
@@ -67,6 +68,7 @@ struct ssi_sd_state {
     int32_t ncrlen;
     int32_t response_pos;
     int32_t stopping;
+    bool clear_cmd;
     SDBus sdbus;
 };
 
@@ -109,6 +111,10 @@ static uint32_t ssi_sd_transfer(SSIPeripheral *dev, uint32_t val)
     SDRequest request;
     uint8_t longresp[16];
 
+    if (s->mode > SSI_SD_CMDCRC) {
+        DPRINTF("SD byte 0x%02x\n", (uint8_t)val);
+    }
+
     /*
      * Special case: allow CMD12 (STOP TRANSMISSION) while reading data.
      *
@@ -133,9 +139,22 @@ static uint32_t ssi_sd_transfer(SSIPeripheral *dev, uint32_t val)
 
     switch (s->mode) {
     case SSI_SD_CMD:
+        if (val == SSI_DUMMY) {
+            DPRINTF("Dummy cmd 0x%02x\n", (uint8_t)val);
+            s->mode = SSI_SD_DUMMY;
+            return SSI_DUMMY;
+        }
+        s->cmd = val & 0x3f;
+        DPRINTF("CMD %u recv\n", s->cmd );
+        s->mode = SSI_SD_CMDARG;
+        s->arglen = 0;
+        s->ncrlen = 0;
+        return SSI_DUMMY;
+        break;
+    case SSI_SD_DUMMY:
         switch (val) {
         case SSI_DUMMY:
-            DPRINTF("NULL command\n");
+            DPRINTF("Dummy byte 0x%02x\n", (uint8_t)val);
             return SSI_DUMMY;
             break;
         case SSI_TOKEN_SINGLE:
@@ -145,7 +164,6 @@ static uint32_t ssi_sd_transfer(SSIPeripheral *dev, uint32_t val)
             return SSI_DUMMY;
         case SSI_TOKEN_STOP_TRAN:
             DPRINTF("Stop multiple write\n");
-
             /* manually issue cmd12 to stop the transfer */
             request.cmd = 12;
             request.arg = 0;
@@ -163,11 +181,6 @@ static uint32_t ssi_sd_transfer(SSIPeripheral *dev, uint32_t val)
 
             return SSI_DUMMY;
         }
-
-        s->cmd = val & 0x3f;
-        s->mode = SSI_SD_CMDARG;
-        s->arglen = 0;
-        s->ncrlen = 0;
         return SSI_DUMMY;
     case SSI_SD_CMDARG:
         {
@@ -198,9 +211,9 @@ static uint32_t ssi_sd_transfer(SSIPeripheral *dev, uint32_t val)
             DPRINTF("CMD%d arg 0x%08x\n", s->cmd, request.arg);
             s->arglen = sdbus_do_command(&s->sdbus, &request, longresp);
             if (s->arglen <= 0) {
+                DPRINTF("SD command failed code %d\n", s->arglen);
                 s->arglen = 1;
                 s->response[0] = 4;
-                DPRINTF("SD command failed\n");
             } else if (s->cmd == 8 || s->cmd == 58) {
                 /* CMD8/CMD58 returns R3/R7 response */
                 DPRINTF("Returned R3/R7\n");
@@ -287,7 +300,7 @@ static uint32_t ssi_sd_transfer(SSIPeripheral *dev, uint32_t val)
             DPRINTF("Data read\n");
             s->mode = SSI_SD_DATA_START;
         } else {
-            DPRINTF("End of command\n");
+            DPRINTF("End of command %u\n", val);
             s->mode = SSI_SD_CMD;
         }
         return SSI_DUMMY;
@@ -314,12 +327,12 @@ static uint32_t ssi_sd_transfer(SSIPeripheral *dev, uint32_t val)
         s->crc16 <<= 8;
         s->response_pos++;
         if (s->response_pos == 2) {
-            DPRINTF("CRC16 read end\n");
             if (s->read_bytes == 512 && s->cmd != 17) {
                 s->mode = SSI_SD_PREP_DATA;
             } else {
                 s->mode = SSI_SD_CMD;
             }
+            DPRINTF("CRC16 read end, new mode %u\n", s->mode);
             s->read_bytes = 0;
             s->response_pos = 0;
         }
@@ -328,21 +341,26 @@ static uint32_t ssi_sd_transfer(SSIPeripheral *dev, uint32_t val)
         sdbus_write_byte(&s->sdbus, val);
         s->write_bytes++;
         if (!sdbus_receive_ready(&s->sdbus) || s->write_bytes == 512) {
-            DPRINTF("Data write end\n");
+            DPRINTF("Data write end (%u write bytes)\n", s->write_bytes);
             s->mode = SSI_SD_SKIP_CRC16;
             s->response_pos = 0;
         }
         return val;
     case SSI_SD_SKIP_CRC16:
         /* we don't verify the crc16 */
+        DPRINTF("CRC16 receive %u %d\n", val, s->response_pos);
         s->response_pos++;
         if (s->response_pos == 2) {
-            DPRINTF("CRC16 receive end\n");
-            s->mode = SSI_SD_RESPONSE;
+            //s->mode = SSI_SD_RESPONSE;
             s->write_bytes = 0;
-            s->arglen = 1;
-            s->response[0] = DATA_RESPONSE_ACCEPTED;
+            s->arglen = 0;
+            //s->response[0] = DATA_RESPONSE_ACCEPTED;
+            //s->response_pos = 0;
+        } else if (s->response_pos == 3) {
+            DPRINTF("CRC16 receive end\n");
+            s->mode = SSI_SD_CMD;
             s->response_pos = 0;
+            return DATA_RESPONSE_ACCEPTED;
         }
         return SSI_DUMMY;
     }
@@ -424,12 +442,13 @@ static int _set_cs(SSIPeripheral *dev, bool select) {
         // unused
     }
 
-    s->arglen = 0;
-    s->ncrlen = 0;
-
-    if (s->mode <= SSI_SD_CMDCRC) {
+    if (s->mode <= SSI_SD_CMDCRC || s->clear_cmd) {
         s->mode = 0;
         s->cmd = 0;
+        s->clear_cmd = false;
+
+        s->arglen = 0;
+        s->ncrlen = 0;
 
         memset(s->cmdarg, 0, sizeof(s->cmdarg));
         memset(s->response, 0, sizeof(s->response));

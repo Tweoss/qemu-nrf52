@@ -28,6 +28,9 @@ struct ssi_max11254_state {
     int cur_xfer_pos;
 
     uint8_t cmd;
+    uint8_t mode;
+    uint8_t seq_mode;
+    uint8_t rate;
     bool is_register;
     bool is_timer_running;
     uint8_t rsp_buffer[16];
@@ -42,21 +45,24 @@ struct ssi_max11254_state {
 #define REGISTER_WRITE      0x00
 #define REGISTER_READ       0x01
 
-#define DATA0_ADDR          0x0E
+#define DATA0_ADDR          (14 << 1u)
 
-#define COMMAND_PD          0x10
-#define COMMAND_CAL         0x20
-#define COMMAND_SEQ         0x30
+#define COMMAND_SEQ         (8 << 1u)
+#define COMMAND_CTRL1       (1 << 1u)
 
 #define RATE_9              0x09
 
 
 REG8(MAX_SEQ, COMMAND_SEQ)
+    FIELD(MAX_SEQ, RDY_BEN, 0, 1)
     FIELD(MAX_SEQ, MODE, 3, 2)
 REG8(MAX_READ, DATA0_ADDR)
 
+FIELD(MAX_CTRL1, CONTSC, 0, 1)
+FIELD(MAX_CTRL1, SCYCLE, 1, 1)
+
 FIELD(MAX_CONV, RATE, 0, 4)
-FIELD(MAX_CONV, MODE, 5, 2)
+FIELD(MAX_CONV, MODE, 4, 2)
 
 FIELD(MAX_REG, RW, 0, 1)
 FIELD(MAX_REG, ADDR, 1, 5)
@@ -79,17 +85,37 @@ static uint32_t _transfer(SSIPeripheral *dev, uint32_t value)
 
         if (!s->is_register) {
 
-            // conversion
-            uint8_t mode = s->cmd & R_MAX_CONV_MODE_MASK;
-            mode >>= R_MAX_CONV_MODE_SHIFT;
-            info_report("MAX#%u SEQ: [value: 0x%02X] mode=%u", s->id, value8, mode);
-            if (mode) {
+            // conversion command
+            s->rate = s->cmd & R_MAX_CONV_RATE_MASK;
+            s->mode = s->cmd & R_MAX_CONV_MODE_MASK;
+            s->mode >>= R_MAX_CONV_MODE_SHIFT;
+
+            /*
+             * In sequencer mode 1, however, continuous conversion operation
+             * (CTRL1:SCYCLE=’0’) and continuous single-cycle conversion
+             * operation (CTRL1:SCYCLE=’1’ and CTRL1:CONTSC=’1’) are
+             * running continuously and must be terminated with the
+             * Mode Exit sequence.
+             */
+
+            bool is_cont = s->regs[COMMAND_CTRL1] & R_MAX_CTRL1_CONTSC_MASK ? true:false;
+
+//            info_report("MAX#%u SEQ: [value: 0x%02X] mode=%u seq_mode=%u cont=%d",
+//                        s->id,
+//                        value8,
+//                        s->mode,
+//                        s->seq_mode,
+//                        is_cont);
+
+            if (s->mode == 3 &&
+                s->seq_mode == 0) {
+
                 ptimer_transaction_begin(s->ptimer);
                 ptimer_stop(s->ptimer);
-                ptimer_set_freq(s->ptimer, 1000+s->id); // TODO Rate_9 = 1.3ms conversion time ?
+                ptimer_set_freq(s->ptimer, 1000+s->id); // Rate_9 = 1.3ms conversion time ?
                 ptimer_set_count(s->ptimer, 13);
                 ptimer_set_limit(s->ptimer, 13, 13);
-                ptimer_run(s->ptimer, mode != 3);
+                ptimer_run(s->ptimer, !is_cont);
                 ptimer_transaction_commit(s->ptimer);
             }
         }
@@ -98,12 +124,35 @@ static uint32_t _transfer(SSIPeripheral *dev, uint32_t value)
 
         if (s->is_register) {
 
+//            info_report("MAX#%u reg: [addr: 0x%02X] (R=%u)",
+//                        s->id,
+//                        s->cmd & R_MAX_REG_ADDR_MASK,
+//                        s->cmd & R_MAX_REG_RW_MASK);
+
             if (s->cmd & R_MAX_REG_RW_MASK) {
                 // read
-                ret = s->regs[s->cmd & R_MAX_REG_ADDR_MASK];
+                if ((s->cmd & R_MAX_REG_ADDR_MASK) == DATA0_ADDR) {
+                    z_model_adc adc;
+                    z_model__compute_adc(s->p_model, s->id, &adc);
+                    memcpy(&s->rsp_buffer[s->cur_xfer_pos-1],
+                           &adc.adc[0], 3); // TODO fix
+                    memcpy(&s->rsp_buffer[s->cur_xfer_pos-1+3],
+                           &adc.adc[1], 3);
+                } else {
+                    s->rsp_buffer[s->cur_xfer_pos-1] = s->regs[s->cmd & R_MAX_REG_ADDR_MASK];
+                }
             } else {
                 // write
                 s->regs[s->cmd & R_MAX_REG_ADDR_MASK] = value8;
+                if ((s->cmd & R_MAX_REG_ADDR_MASK) == COMMAND_SEQ) {
+                    s->seq_mode = value8 & R_MAX_SEQ_MODE_MASK;
+                    s->seq_mode >>= R_MAX_SEQ_MODE_SHIFT;
+                } else {
+
+//                    info_report("MAX#%u WR: [val: 0x%02X]",
+//                                s->id,
+//                                value8);
+                }
             }
 
         }

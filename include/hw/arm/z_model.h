@@ -22,20 +22,19 @@ struct z_model_state {
     uint32_t counter;
 
     uint8_t id;
-
 };
 
 typedef struct {
-    int32_t acc_mg[3];
-    int32_t gyr_mrad_s[3];
+    int16_t acc_mg[3];
+    int16_t gyr_mrad_s[3];
 } z_model_acc;
 
 typedef struct {
-    int32_t adc[3];
+    uint32_t adc[3];
 } z_model_adc;
 
 void z_model__compute_acc(z_model_state *s, z_model_acc *p_acc);
 
-void z_model__compute_adc(z_model_state *s, uint8_t id, z_model_acc *p_acc);
+void z_model__compute_adc(z_model_state *s, uint8_t id, z_model_adc *p_adc);
 
 #endif //QEMU_NRF52_Z_MODEL_H

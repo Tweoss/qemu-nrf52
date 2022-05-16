@@ -19,6 +19,11 @@ OBJECT_DECLARE_SIMPLE_TYPE(ssi_dsox_state, SSI_LSM)
 #define FIFO_SIZE      256
 #define FIFO_MASK_SIZE 0xFF
 
+typedef struct __attribute((packed)) {
+    uint8_t tag;
+    uint8_t raw_data[6];
+} sLSMfifo;
+
 struct ssi_dsox_state {
     SSIPeripheral parent_obj;
 
@@ -38,7 +43,7 @@ struct ssi_dsox_state {
     uint8_t read_level;
     uint8_t fifo_level;
     uint8_t fifo_diff;
-    z_model_acc fifo_buffer[FIFO_SIZE];
+    sLSMfifo fifo_buffer[FIFO_SIZE];
 
     bool uses_int1;
 
@@ -95,7 +100,7 @@ static uint32_t _transfer(SSIPeripheral *dev, uint32_t value)
                     break;
                 case A_LSM_FIFO_DATA_OUT_XL:
                     //info_report("A_LSM_FIFO_DATA_OUT_XL %u %u", s->fifo_level, s->read_level);
-                    memcpy(s->rsp_buffer, &s->fifo_buffer[s->read_level], sizeof(z_model_acc));
+                    memcpy(s->rsp_buffer, &s->fifo_buffer[s->read_level], sizeof(sLSMfifo));
                     s->read_level += 1;
                     s->fifo_diff = s->fifo_level - s->read_level;
                     break;
@@ -171,8 +176,18 @@ static void timer_hit(void *opaque)
 {
     struct ssi_dsox_state *s = opaque;
 
-    z_model__compute_acc(s->p_model, &s->fifo_buffer[s->fifo_level]);
+    z_model_acc p_acc[1];
+    z_model__compute_acc(s->p_model, p_acc);
 
+    // gyroscope
+    s->fifo_buffer[s->fifo_level].tag = 0;
+    memcpy(&s->fifo_buffer[s->fifo_level].raw_data, p_acc[0].gyr_mrad_s, sizeof(p_acc[0].gyr_mrad_s));
+    s->fifo_level += 1;
+    s->fifo_diff = s->fifo_level - s->read_level;
+
+    // accelerometer
+    s->fifo_buffer[s->fifo_level].tag = 1;
+    memcpy(&s->fifo_buffer[s->fifo_level].raw_data, p_acc[0].acc_mg, sizeof(p_acc[0].acc_mg));
     s->fifo_level += 1;
     s->fifo_diff = s->fifo_level - s->read_level;
 

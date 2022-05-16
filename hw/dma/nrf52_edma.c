@@ -42,7 +42,7 @@ static void nrf52832_edma_update_irq(EDMAState *s)
     irq |= (s->regs[R_EDMA_EVENT_STOPPED]   &&
             (s->regs[R_EDMA_INTEN] & R_EDMA_INTEN_STOPPED_MASK));
 
-    info_report("nrf52832.edma: irq %d STOPPED %u", irq, s->regs[R_EDMA_EVENT_STOPPED]);
+    //info_report("nrf52832.edma: irq %d STOPPED %u", irq, s->regs[R_EDMA_EVENT_STOPPED]);
 
     qemu_set_irq(s->irq, irq);
 }
@@ -54,7 +54,7 @@ static uint64_t _read(void *opaque,
     uint64_t r;
     EDMAState *s = NRF52832_EDMA(opaque);
 
-    info_report("nrf52832.edma: _read %08lX", addr);
+    //info_report("nrf52832.edma: _read %08lX", addr);
 
     switch (addr) {
         case A_EDMA_INTENSET:
@@ -109,7 +109,7 @@ static void _write(void *opaque,
 
     EDMAState *s = NRF52832_EDMA(opaque);
 
-    info_report("nrf52832.edma: _write %08lX %lu", addr, value);
+    //info_report("nrf52832.edma: _write %08lX %lu", addr, value);
 
     switch (addr) { // EDMA
 
@@ -201,56 +201,66 @@ static void _write(void *opaque,
 
                 qemu_set_irq(s->cs_lines[0], 0);
 
-                MemTxResult result = address_space_rw(&s->downstream_as,
-                                                      s->regs[R_EDMA_TXD_PTR],
-                                                      MEMTXATTRS_UNSPECIFIED,
-                                                      s->tx_dma,
-                                                      s->regs[R_EDMA_TXD_CNT],
-                                                      false);
-                (void)result;
+                MemTxResult result;
+                if (s->regs[R_EDMA_TXD_CNT]) {
+                    result = address_space_rw(&s->downstream_as,
+                                                          s->regs[R_EDMA_TXD_PTR],
+                                                          MEMTXATTRS_UNSPECIFIED,
+                                                          s->tx_dma,
+                                                          s->regs[R_EDMA_TXD_CNT],
+                                                          false);
+                    (void) result;
+                }
 
                 uint32_t length = s->regs[R_EDMA_TXD_CNT] > s->regs[R_EDMA_RXD_CNT] ?
                         s->regs[R_EDMA_TXD_CNT] : s->regs[R_EDMA_RXD_CNT];
 
-                info_report("nrf52832.edma: xfer size: %u %u %u",
-                            s->regs[R_EDMA_TXD_CNT],
-                            s->regs[R_EDMA_RXD_CNT],
-                            length);
+//                info_report("nrf52832.edma: xfer size: %u %u %u",
+//                            s->regs[R_EDMA_TXD_CNT],
+//                            s->regs[R_EDMA_RXD_CNT],
+//                            length);
 
-                printf("TX:");
-                for (int i=0;i<length;i++) {
-                    printf(" %02X" , s->tx_dma[i]);
-                }
-                printf("\n");
+//                printf("TX:");
+//                for (int i=0;i<length;i++) {
+//                    printf(" %02X" , s->tx_dma[i]);
+//                }
+//                printf("\n");
 
                 for (int i=0;i<length;i++) {
                     uint8_t byte = ssi_transfer(s->bus, s->tx_dma[i]);
-                    s->rx_dma[i] = byte;
+                    if (i < s->regs[R_EDMA_RXD_CNT]) {
+                        s->rx_dma[i] = byte;
+                    } else {
+                        s->rx_dma[i] = 0xFF;
+                    }
                 }
 
-                printf("RX:");
-                for (int i=0;i<length;i++) {
-                    printf(" %02X" , s->rx_dma[i]);
-                }
-                printf("\n");
+//                printf("RX:");
+//                for (int i=0;i<length;i++) {
+//                    printf(" %02X" , s->rx_dma[i]);
+//                }
+//                printf("\n");
 
-                s->regs[R_EDMA_RXD_CNT] = length;
+                if (s->regs[R_EDMA_RXD_CNT]) {
+
+                    result = address_space_rw(&s->downstream_as,
+                                              s->regs[R_EDMA_RXD_PTR],
+                                              MEMTXATTRS_UNSPECIFIED,
+                                              s->rx_dma,
+                                              s->regs[R_EDMA_RXD_CNT],
+                                              true);
+                    (void)result;
+                }
+
+//                s->regs[R_EDMA_RXD_CNT] = length;
                 s->regs[R_EDMA_TXD_CNT] = 0;
-
-                result = address_space_rw(&s->downstream_as,
-                                          s->regs[R_EDMA_RXD_PTR],
-                                          MEMTXATTRS_UNSPECIFIED,
-                                          s->rx_dma,
-                                          s->regs[R_EDMA_RXD_CNT],
-                                          true);
-                (void)result;
 
                 qemu_set_irq(s->cs_lines[0], 1);
 
                 ptimer_transaction_begin(s->ptimer);
                 ptimer_stop(s->ptimer);
-                ptimer_set_freq(s->ptimer, 1000000);
-                ptimer_set_count(s->ptimer, 64 + (s->regs[R_EDMA_RXD_CNT] << 3));
+                ptimer_set_freq(s->ptimer, 1000000); // 1 MHz
+                ptimer_set_count(s->ptimer, 8 + (length << 3));
                 ptimer_run(s->ptimer, 1);
                 ptimer_transaction_commit(s->ptimer);
             }
