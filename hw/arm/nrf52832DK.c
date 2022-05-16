@@ -109,6 +109,13 @@ static void nrf52832DK_init(MachineState *machine)
         qemu_irq int1_line = qdev_get_gpio_in(DEVICE(&s->nrf52832), MAX_DRDY2);
         qdev_connect_gpio_out_named(dev, "DRDY", 0, int1_line);
     }
+
+    /* add a TMP423 temperature sensor */
+    {
+        void *i2c_bus = qdev_get_child_bus(DEVICE(&s->nrf52832.spim0_twim0), "i2c");
+        assert(i2c_bus);
+        i2c_slave_create_simple(i2c_bus, "tmp423", 0x48);
+    }
 }
 
 static void nrf52832DK_machine_class_init(ObjectClass *oc, void *data)

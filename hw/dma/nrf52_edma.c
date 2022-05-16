@@ -82,6 +82,7 @@ static void timer_hit(void *opaque)
             s->regs[R_EDMA_EVENT_ENDRX] = 1;
             s->regs[R_EDMA_EVENT_ENDTX] = 1;
             s->regs[R_EDMA_EVENT_END] = 1;
+            s->regs[R_EDMA_EVENT_STOPPED] = 1;
             break;
         case eEDMAtransationTWI_RX:
             s->regs[R_EDMA_EVENT_LAST_RX] = 1;
@@ -308,7 +309,7 @@ static void nrf52832_edma_realize(DeviceState *dev, Error **errp)
 
     s->bus = ssi_create_bus(dev, "ssi");
 
-    s->i2c_bus = i2c_init_bus(dev, NULL);
+    s->i2c_bus = i2c_init_bus(dev, "i2c");
 
     s->ptimer = ptimer_init(timer_hit, s, PTIMER_POLICY_DEFAULT);
 
@@ -323,8 +324,6 @@ static void nrf52832_edma_realize(DeviceState *dev, Error **errp)
                           _TYPE_NAME, NRF52832_EDMA_PER_SIZE);
     sysbus_init_mmio(SYS_BUS_DEVICE(dev), &s->iomem);
     sysbus_init_irq(SYS_BUS_DEVICE(dev), &s->irq);
-
-//    ssi_auto_connect_slaves();
 
     qdev_init_gpio_out_named(dev, s->cs_lines, "cs_lines", NUM_SPI_SLAVES);
 }
