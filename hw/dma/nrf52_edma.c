@@ -89,11 +89,15 @@ static void timer_hit(void *opaque)
             s->regs[R_EDMA_EVENT_ENDRX] = 1;
             s->regs[R_EDMA_EVENT_STOPPED] = 1;
             s->regs[R_EDMA_EVENT_END] = 1;
+            s->regs[R_EDMA_RXD_AMOUNT] = s->regs[R_EDMA_RXD_CNT];
+            s->regs[R_EDMA_RXD_CNT] = 0;
             break;
         case eEDMAtransationTWI_TX:
             s->regs[R_EDMA_EVENT_ENDTX] = 1;
             s->regs[R_EDMA_EVENT_STOPPED] = 1;
             s->regs[R_EDMA_EVENT_END] = 1;
+            s->regs[R_EDMA_TXD_AMOUNT] = s->regs[R_EDMA_TXD_CNT];
+            s->regs[R_EDMA_TXD_CNT] = 0;
             break;
         default:
             break;
@@ -154,8 +158,6 @@ static void _write(void *opaque,
                     ptimer_run(s->ptimer, 1);
                     ptimer_transaction_commit(s->ptimer);
 
-                    s->regs[R_EDMA_TXD_CNT] = 0;
-
                 }
             }
             break;
@@ -170,7 +172,7 @@ static void _write(void *opaque,
                 } else {
 
                     int i;
-                    for (i=0;i<s->regs[R_EDMA_TXD_CNT];i++) {
+                    for (i=0;i<s->regs[R_EDMA_RXD_CNT];i++) {
                         s->rx_dma[i] = i2c_recv(s->i2c_bus);
                     }
                     i2c_end_transfer(s->i2c_bus);
