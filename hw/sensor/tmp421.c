@@ -287,7 +287,7 @@ static int tmp421_event(I2CSlave *i2c, enum i2c_event event)
 }
 
 static const VMStateDescription vmstate_tmp421 = {
-    .name = "TMP421",
+    .name = TYPE_TMP421,
     .version_id = 0,
     .minimum_version_id = 0,
     .fields = (VMStateField[]) {

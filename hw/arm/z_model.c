@@ -11,12 +11,28 @@
 #include "hw/sysbus.h"
 #include "hw/arm/z_model.h"
 
+struct z_model_state {
+    SSIPeripheral parent_obj;
+
+    bool running;
+    int64_t timer_start_ns;
+    int64_t update_counter_ns;
+    uint32_t counter;
+
+    uint8_t id;
+};
+
 void z_model__compute_acc(z_model_state *s, z_model_acc *p_acc)
 {
     // TODO int64_t now = qemu_clock_get_us(QEMU_CLOCK_VIRTUAL);
 }
 
 void z_model__compute_adc(z_model_state *s, uint8_t id, z_model_adc *p_adc)
+{
+    // TODO int64_t now = qemu_clock_get_us(QEMU_CLOCK_VIRTUAL);
+}
+
+void z_model__compute_pressure(z_model_state *s, uint8_t id, z_model_pressure *p_press)
 {
     // TODO int64_t now = qemu_clock_get_us(QEMU_CLOCK_VIRTUAL);
 }

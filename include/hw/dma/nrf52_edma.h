@@ -31,6 +31,8 @@ REG32(EDMA_EVENT_SPI_XFER_STARTED, 0x14C)
 REG32(EDMA_EVENT_LAST_RX, 0x15C)
 REG32(EDMA_EVENT_LAST_TX, 0x160)
 
+REG32(EDMA_SHORTS, 0x200)
+
 REG32(EDMA_INTEN, 0x300)
     FIELD(EDMA_INTEN, STOPPED, 1, 1)
     FIELD(EDMA_INTEN, ENDRX, 4, 1)
@@ -102,6 +104,8 @@ struct EDMAState {
 
     uint8_t rx_dma[256];
     uint8_t tx_dma[256];
+
+    uint32_t error;
 
     bool enabled;
     eEDMAtransation transaction;

@@ -23,6 +23,11 @@ config EMC141X
     depends on I2C
     default y if I2C_DEVICES
 
+config BMP3
+    bool
+    depends on I2C
+    default y if I2C_DEVICES
+
 config ADM1272
     bool
     depends on I2C

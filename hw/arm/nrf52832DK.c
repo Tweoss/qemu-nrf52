@@ -19,6 +19,9 @@
 #define MAX_SS1_PIN           NRF_GPIO_PIN_MAP(0, 31)
 #define MAX_SS2_PIN           NRF_GPIO_PIN_MAP(0, 30)
 
+#define BMP390_DRDY1             NRF_GPIO_PIN_MAP(0, 11)
+#define BMP390_DRDY2             NRF_GPIO_PIN_MAP(0, 12)
+
 struct nrf52832DKMachineState {
     MachineState parent;
 
@@ -44,6 +47,9 @@ static void nrf52832DK_init(MachineState *machine)
     armv7m_load_kernel(ARM_CPU(first_cpu), machine->kernel_filename,
                        s->nrf52832.flash_size);
 
+    DeviceState *model = qdev_new(TYPE_ZMODEL);
+
+#if 0
     // SD card
     {
         void *ssi_bus = qdev_get_child_bus(DEVICE(&s->nrf52832.spim0_twim0), "ssi");
@@ -54,8 +60,6 @@ static void nrf52832DK_init(MachineState *machine)
         qemu_irq line = qdev_get_gpio_in_named(carddev, SSI_GPIO_CS, 0);
         qdev_connect_gpio_out_named(DEVICE(&s->nrf52832.spim0_twim0), "cs_lines", 0, line);
     }
-
-    DeviceState *model = qdev_new(TYPE_ZMODEL);
 
     // LSM6 (CS pin SPI-activated)
     {
@@ -116,6 +120,37 @@ static void nrf52832DK_init(MachineState *machine)
         assert(i2c_bus);
         i2c_slave_create_simple(i2c_bus, "tmp423", 0x48);
     }
+#endif
+
+    /* add a first BMP390 pressure sensor */
+    {
+        void *i2c_bus = qdev_get_child_bus(DEVICE(&s->nrf52832.spim1_twim1), "i2c");
+        assert(i2c_bus);
+        I2CSlave *dev = i2c_slave_new("bmp390", (0x77 << 0u));
+        // connect Z model
+        object_property_set_link(OBJECT(&dev->qdev), "model",
+                                 OBJECT(model), &error_fatal);
+        // init it
+        i2c_slave_realize_and_unref(dev, i2c_bus, &error_abort);
+        // connect DRDY
+        qemu_irq int1_line = qdev_get_gpio_in(DEVICE(&s->nrf52832), BMP390_DRDY1);
+        qdev_connect_gpio_out_named(&dev->qdev, "DRDY", 0, int1_line);
+    }
+
+    /* add a second BMP390 pressure sensor */
+    {
+        void *i2c_bus = qdev_get_child_bus(DEVICE(&s->nrf52832.spim1_twim1), "i2c");
+        assert(i2c_bus);
+        I2CSlave *dev = i2c_slave_new("bmp390", (0x76 << 0u));
+        // connect Z model
+        object_property_set_link(OBJECT(&dev->qdev), "model",
+                                 OBJECT(model), &error_fatal);
+        // init it
+        i2c_slave_realize_and_unref(dev, i2c_bus, &error_abort);
+        // connect DRDY
+        qemu_irq int1_line = qdev_get_gpio_in(DEVICE(&s->nrf52832), BMP390_DRDY2);
+        qdev_connect_gpio_out_named(&dev->qdev, "DRDY", 0, int1_line);
+    }
 }
 
 static void nrf52832DK_machine_class_init(ObjectClass *oc, void *data)
@@ -153,5 +188,7 @@ type_init(nrf52832DK_machine_init);
  * ./build/qemu-img convert -f raw -O qcow2 sd0.img sd1.img
  *
  * ./qemu-system-arm -M nrf52832DK -device loader,file=../fw/PowerMeter.elf -nographic -drive file=../sd0.img,id=mycard,format=qcow2,if=none -device sd-card,spi=true,spec_version=3,drive=mycard -s -S
+ *
+ * ./qemu-system-arm -M nrf52832DK -device loader,file=/mnt/c/Nordic/Projects/SITF/Aeropod/cmake-build-debug/Aeropod.elf -nographic -s -S
  *
  */
