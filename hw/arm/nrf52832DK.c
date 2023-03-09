@@ -191,4 +191,26 @@ type_init(nrf52832DK_machine_init);
  *
  * ./qemu-system-arm -M nrf52832DK -device loader,file=/mnt/c/Nordic/Projects/SITF/Aeropod/cmake-build-debug/Aeropod.elf -nographic -s -S
  *
+ * ///////////////////////////////////////////////////////////////////////////////////////////////////
+ *
+ * OS: Microsoft Windows 10 Home 64-bit
+ *
+ * https://stackoverflow.com/questions/53084815/compile-qemu-under-windows-10-64-bit-for-windows-10-64-bit
+ *
+ * - Download and install msys2 to C:\msys64: http://repo.msys2.org/distrib/x86_64/msys2-x86_64-20180531.exe
+ * - Start C:\msys64\mingw64.exe
+ * - Updates (then close window and restart mingw64.exe): pacman -Syu
+ * - Updates: pacman -Su
+ * - Install basic packets: pacman -S base-devel mingw-w64-x86_64-toolchain git python
+ * - Install QEMU specific packets: pacman -S mingw-w64-x86_64-glib2 mingw-w64-x86_64-gtk3 mingw-w64-x86_64-SDL2
+ * - Get QEMU sources:
+ *      - git submodule update --init ui/keycodemapdb
+ *      - git submodule update --init capstone
+ *      - git submodule update --init dtc
+ *      - Comment out (#) Capstone (line 508) in qemu\Makefile or meson_options.txt
+ * - Build qemu:
+ *      - ../configure --target-list=arm-softmmu --disable-werror --disable-stack-protector
+ *      - make -j4 -k
+ *
+ * - Run qemu with the MSYS2 PATH variable set: PATH=/mingw64/bin:/usr/local/bin:/usr/bin:/bin:/c/Windows/System32:/c/Windows:/c/Windows/System32/Wbem:/c/Windows/System32/WindowsPowerShell/v1.0/:/usr/bin/site_perl:/usr/bin/vendor_perl:/usr/bin/core_perl
  */

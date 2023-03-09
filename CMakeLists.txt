@@ -2,7 +2,11 @@ cmake_minimum_required (VERSION 3.15)
 
 project (qemu-nrf52 LANGUAGES C CXX)
 
+set(CMAKE_EXPORT_COMPILE_COMMANDS      ON)
+
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11")
+
+set(BUILD_DIR     "build")
 
 MACRO(HEADER_DIRECTORIES return_list)
     FILE(GLOB_RECURSE new_list "${CMAKE_CURRENT_SOURCE_DIR}/hw/*.h")
@@ -33,11 +37,11 @@ message(STATUS "[INFO] Found ${SRCS_count} source files.")
 
 include_directories(${CMAKE_CURRENT_SOURCE_DIR})
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/include)
-include_directories(${CMAKE_CURRENT_SOURCE_DIR}/build)
-include_directories(${CMAKE_CURRENT_SOURCE_DIR}/build/arm/)
+include_directories(${CMAKE_CURRENT_SOURCE_DIR}/${BUILD_DIR})
+include_directories(${CMAKE_CURRENT_SOURCE_DIR}/${BUILD_DIR}/arm/)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/tcg/arm/)
-include_directories(${CMAKE_CURRENT_SOURCE_DIR}/build/arm-softmmu/)
-include_directories(${CMAKE_CURRENT_SOURCE_DIR}/build/hw/core)
+include_directories(${CMAKE_CURRENT_SOURCE_DIR}/${BUILD_DIR}/arm-softmmu/)
+include_directories(${CMAKE_CURRENT_SOURCE_DIR}/${BUILD_DIR}/hw/core)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/target/arm)
 include_directories(${header_dir_list})
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/hw)
@@ -61,7 +65,7 @@ add_library(${PROJECT_NAME}
         ${CMAKE_CURRENT_SOURCE_DIR}/hw/adc/max11254.c
         ${SRCS})
 
-add_custom_target(qemu_arm COMMAND make -C ${CMAKE_CURRENT_SOURCE_DIR}/build)
+add_custom_target(qemu_arm COMMAND make -C ${CMAKE_CURRENT_SOURCE_DIR}/${BUILD_DIR})
 
 #install(TARGETS qemu_arm
 #        #CONFIGURATIONS Release

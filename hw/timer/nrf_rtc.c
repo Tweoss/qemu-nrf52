@@ -164,7 +164,7 @@ static void counter_compare(NRF5RtcState *s)
     }
 }
 
-static uint64_t _read(void *opaque,
+static uint64_t _nrf_read(void *opaque,
                       hwaddr addr,
                       unsigned size) {
 
@@ -192,13 +192,13 @@ static uint64_t _read(void *opaque,
             break;
     }
 
-    //info_report("nrf.rtc: _read %08lX = %lu", addr, r);
+    //info_report("nrf.rtc: _nrf_read %08lX = %lu", addr, r);
 
     return r;
 
 }
 
-static void _write(void *opaque,
+static void _nrf_write(void *opaque,
                    hwaddr addr,
                    uint64_t value,
                    unsigned size) {
@@ -206,7 +206,7 @@ static void _write(void *opaque,
     NRF5RtcState *s = NRF_RTC(opaque);
     uint64_t now = qemu_clock_get_ns(QEMU_CLOCK_VIRTUAL);
 
-    //info_report("nrf.rtc: _write %08lX %lu", addr, value);
+    //info_report("nrf.rtc: _nrf_write %08lX %lu", addr, value);
 
     switch (addr) { // EDMA
 
@@ -304,8 +304,8 @@ static void nrf_rtcreset(DeviceState *dev)
 }
 
 static const MemoryRegionOps rtc_ops = {
-        .read =  _read,
-        .write = _write,
+        .read =  _nrf_read,
+        .write = _nrf_write,
         .endianness = DEVICE_LITTLE_ENDIAN,
 };
 

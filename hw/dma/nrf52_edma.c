@@ -53,14 +53,14 @@ static void nrf52832_edma_update_irq(EDMAState *s)
     s->error = 0;
 }
 
-static uint64_t _read(void *opaque,
+static uint64_t _nrf_read(void *opaque,
                  hwaddr addr,
                  unsigned size) {
 
     uint64_t r;
     EDMAState *s = NRF52832_EDMA(opaque);
 
-    //info_report("nrf52832.edma: _read %08lX", addr);
+    //info_report("nrf52832.edma: _nrf_read %08lX", addr);
 
     switch (addr) {
         case A_EDMA_INTENSET:
@@ -118,14 +118,14 @@ static void timer_hit(void *opaque)
     nrf52832_edma_update_irq(s);
 }
 
-static void _write(void *opaque,
+static void _nrf_write(void *opaque,
               hwaddr addr,
               uint64_t value,
               unsigned size) {
 
     EDMAState *s = NRF52832_EDMA(opaque);
 
-    // info_report("nrf52832.edma: _write %03lX <- %lX", addr, value);
+    // info_report("nrf52832.edma: _nrf_write %03lX <- %lX", addr, value);
 
     switch (addr) { // EDMA
 
@@ -180,7 +180,7 @@ static void _write(void *opaque,
                         s->regs[R_EDMA_TXD_CNT] = 0;
                         // info_report("Scheduling RX");
                         // proceed to RX
-                        _write(opaque, A_EDMA_TASKS_START_TWI_RX, 1, 1);
+                        _nrf_write(opaque, A_EDMA_TASKS_START_TWI_RX, 1, 1);
                     }
 
                 }
@@ -345,8 +345,8 @@ static void nrf52832_edma_reset(DeviceState *dev)
 }
 
 static const MemoryRegionOps edma_ops = {
-        .read =  _read,
-        .write = _write,
+        .read =  _nrf_read,
+        .write = _nrf_write,
         .endianness = DEVICE_LITTLE_ENDIAN,
 };
 
