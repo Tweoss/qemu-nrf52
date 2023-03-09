@@ -1,0 +1,8 @@
+<component name="ProjectRunConfigurationManager">
+  <configuration default="false" name="qemu_arm" type="CMakeRunConfiguration" factoryName="Application" PROGRAM_PARAMS="-M nrf52832DK -device loader,file=c:\msys64\home\vgol\fw\Aeropod.elf -nographic" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="qemu-nrf52" TARGET_NAME="qemu-nrf52" CONFIG_NAME="Debug-MSYS2" RUN_PATH="$PROJECT_DIR$/build/qemu-system-arm.exe">
+    <envs>
+      <env name="PATH" value="/mingw64/bin:/usr/local/bin:/usr/bin:/bin:/c/Windows/System32:/c/Windows:/c/Windows/System32/Wbem:/c/Windows/System32/WindowsPowerShell/v1.0/:/usr/bin/site_perl:/usr/bin/vendor_perl:/usr/bin/core_perl" />
+    </envs>
+    <method v="2" />
+  </configuration>
+</component>
