@@ -65,7 +65,12 @@ add_library(${PROJECT_NAME}
         ${CMAKE_CURRENT_SOURCE_DIR}/hw/adc/max11254.c
         ${SRCS})
 
-add_custom_target(qemu_arm COMMAND make -C ${CMAKE_CURRENT_SOURCE_DIR}/${BUILD_DIR})
+# Build on Windows
+add_custom_target(qemu_arm
+        WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/${BUILD_DIR}
+        COMMAND C:/msys64/usr/bin/env MSYSTEM=MSYS /usr/bin/bash -here
+        COMMAND make -j4
+        )
 
 #install(TARGETS qemu_arm
 #        #CONFIGURATIONS Release
