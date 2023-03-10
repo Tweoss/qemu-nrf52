@@ -3,8 +3,6 @@
     <envs>
       <env name="PATH" value="C:\msys64\mingw64\bin;C:\msys64\usr\bin" />
     </envs>
-    <method v="2">
-      <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
-    </method>
+    <method v="2" />
   </configuration>
 </component>

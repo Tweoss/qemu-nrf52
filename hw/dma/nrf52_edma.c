@@ -42,7 +42,7 @@ static void nrf52832_edma_update_irq(EDMAState *s)
     irq |= (s->regs[R_EDMA_EVENT_STOPPED]   &&
             (s->regs[R_EDMA_INTEN] & R_EDMA_INTEN_STOPPED_MASK));
 
-    irq |= (s->error &&
+    irq |= (s->regs[R_EDMA_ERRORSRC] &&
             (s->regs[R_EDMA_INTEN] & R_EDMA_INTEN_ERROR_MASK));
 
 //    if (irq)
@@ -53,35 +53,18 @@ static void nrf52832_edma_update_irq(EDMAState *s)
     s->error = 0;
 }
 
-static uint64_t _nrf_read(void *opaque,
-                 hwaddr addr,
-                 unsigned size) {
-
-    uint64_t r;
-    EDMAState *s = NRF52832_EDMA(opaque);
-
-    //info_report("nrf52832.edma: _nrf_read %08lX", addr);
-
-    switch (addr) {
-        case A_EDMA_INTENSET:
-        case A_EDMA_INTENCLR:
-        case A_EDMA_INTEN:
-            r = s->regs[R_EDMA_INTEN];
-            break;
-        default:
-            r = s->regs[addr / 4];
-            break;
-    }
-
-    return r;
-
-}
+static void _shorts_process(EDMAState *s);
 
 static void timer_hit(void *opaque)
 {
     struct EDMAState *s = opaque;
 
     //info_report("nrf52832.edma: timer_hit %d", s->transaction);
+
+    // send completed, check shorts
+    ptimer_transaction_commit(s->ptimer); // little trick :-)
+    _shorts_process(s);
+    ptimer_transaction_begin(s->ptimer);
 
     switch (s->transaction) {
         case eEDMAtransationSPI:
@@ -91,27 +74,30 @@ static void timer_hit(void *opaque)
             s->regs[R_EDMA_EVENT_STOPPED] = 1;
             break;
         case eEDMAtransationTWI_RX:
-            s->regs[R_EDMA_EVENT_LAST_RX] = 1;
-            s->regs[R_EDMA_EVENT_ENDRX] = 1;
-            s->regs[R_EDMA_EVENT_STOPPED] = 1;
-            s->regs[R_EDMA_EVENT_END] = 1;
-            s->regs[R_EDMA_RXD_AMOUNT] = s->regs[R_EDMA_RXD_CNT];
-            s->regs[R_EDMA_RXD_CNT] = 0;
+//            s->regs[R_EDMA_EVENT_LAST_RX] = 1;
+//            s->regs[R_EDMA_EVENT_ENDRX] = 1;
+//            s->regs[R_EDMA_EVENT_STOPPED] = 1;
+//            s->regs[R_EDMA_EVENT_END] = 1;
+//            s->regs[R_EDMA_RXD_AMOUNT] = s->regs[R_EDMA_RXD_CNT];
+//            s->regs[R_EDMA_RXD_CNT] = 0;
             if (0 == (s->regs[R_EDMA_INTEN] & R_EDMA_INTEN_STOPPED_MASK)) {
                 s->error = 1;
             }
             break;
         case eEDMAtransationTWI_TX:
-            s->regs[R_EDMA_EVENT_ENDTX] = 1;
-            s->regs[R_EDMA_EVENT_STOPPED] = 1;
-            s->regs[R_EDMA_EVENT_END] = 1;
-            s->regs[R_EDMA_TXD_AMOUNT] = s->regs[R_EDMA_TXD_CNT];
-            s->regs[R_EDMA_TXD_CNT] = 0;
+//            s->regs[R_EDMA_EVENT_ENDTX] = 1;
+//            s->regs[R_EDMA_EVENT_STOPPED] = 1;
+//            s->regs[R_EDMA_EVENT_END] = 1;
+//            s->regs[R_EDMA_TXD_AMOUNT] = s->regs[R_EDMA_TXD_CNT];
+//            s->regs[R_EDMA_TXD_CNT] = 0;
             if (0 == (s->regs[R_EDMA_INTEN] & R_EDMA_INTEN_STOPPED_MASK)) {
                 s->error = 1;
             }
             break;
         default:
+            if (0 == (s->regs[R_EDMA_INTEN] & R_EDMA_INTEN_STOPPED_MASK)) {
+                s->error = 1;
+            }
             break;
     }
 
@@ -125,7 +111,14 @@ static void _nrf_write(void *opaque,
 
     EDMAState *s = NRF52832_EDMA(opaque);
 
-    // info_report("nrf52832.edma: _nrf_write %03lX <- %lX", addr, value);
+    if (s->deferred_transaction) {
+        uint32_t deferred_transaction = s->deferred_transaction;
+        s->deferred_transaction = 0;
+        // info_report("nrf52832.edma: deferred_transaction %lX", deferred_transaction);
+        _nrf_write(s, deferred_transaction, 1, 0);
+    }
+
+//    info_report("nrf52832.edma: _nrf_write %03lX <- %lX", addr, value);
 
     switch (addr) { // EDMA
 
@@ -148,11 +141,12 @@ static void _nrf_write(void *opaque,
                 int val = i2c_start_send(s->i2c_bus, s->regs[R_EDMA_TWI_ADDRESS]);
                 if (val) {
                     /* if non zero is returned, the address is not valid */
-                    timer_hit((void*)s);
+                    s->regs[R_EDMA_ERRORSRC] = R_EDMA_ERRORSRC_ANACK_MASK;
+                    s->regs[R_EDMA_EVENT_STOPPED] = 1;
                     warn_report("nrf52832.edma: slave not found (0x%02X)", s->regs[R_EDMA_TWI_ADDRESS]);
                 } else {
 
-                    MemTxResult result = address_space_rw(&s->downstream_as,
+                    (void)address_space_rw(&s->downstream_as,
                                                           s->regs[R_EDMA_TXD_PTR],
                                                           MEMTXATTRS_UNSPECIFIED,
                                                           s->tx_dma,
@@ -164,26 +158,20 @@ static void _nrf_write(void *opaque,
                         i2c_send(s->i2c_bus, s->tx_dma[i]);
                     }
                     i2c_end_transfer(s->i2c_bus);
-                    (void)result;
 
-                    if (s->regs[R_EDMA_RXD_CNT] == 0) { // TODO use SHORTS ?
-                        ptimer_transaction_begin(s->ptimer);
-                        ptimer_stop(s->ptimer);
-                        ptimer_set_freq(s->ptimer, 100000);
-                        ptimer_set_count(s->ptimer, 64 + (s->regs[R_EDMA_TXD_CNT] << 3));
-                        ptimer_run(s->ptimer, 1);
-                        ptimer_transaction_commit(s->ptimer);
-                    } else {
-                        // set registers
-                        s->regs[R_EDMA_EVENT_ENDTX] = 1;
-                        s->regs[R_EDMA_TXD_AMOUNT] = s->regs[R_EDMA_TXD_CNT];
-                        s->regs[R_EDMA_TXD_CNT] = 0;
-                        // info_report("Scheduling RX");
-                        // proceed to RX
-                        _nrf_write(opaque, A_EDMA_TASKS_START_TWI_RX, 1, 1);
-                    }
-
+                    s->regs[R_EDMA_EVENT_LAST_TX] = 1;
+                    s->regs[R_EDMA_EVENT_ENDTX] = 1;
+                    s->regs[R_EDMA_TXD_AMOUNT] = s->regs[R_EDMA_TXD_CNT];
+                    s->regs[R_EDMA_TXD_CNT] = 0;
                 }
+
+                ptimer_transaction_begin(s->ptimer);
+                ptimer_stop(s->ptimer);
+                ptimer_set_freq(s->ptimer, 100000);
+                ptimer_set_count(s->ptimer, 64 + (s->regs[R_EDMA_TXD_CNT] << 3));
+                ptimer_run(s->ptimer, 1);
+                ptimer_transaction_commit(s->ptimer);
+
             }
             break;
         case A_EDMA_TASKS_START_TWI_RX:
@@ -195,7 +183,8 @@ static void _nrf_write(void *opaque,
                 int val = i2c_start_recv(s->i2c_bus, s->regs[R_EDMA_TWI_ADDRESS]);
                 if (val) {
                     /* if non zero is returned, the address is not valid */
-                    timer_hit((void*)s);
+                    s->regs[R_EDMA_ERRORSRC] = R_EDMA_ERRORSRC_ANACK_MASK;
+                    s->regs[R_EDMA_EVENT_STOPPED] = 1;
                     warn_report("nrf52832.edma: slave not found (0x%02X)", s->regs[R_EDMA_TWI_ADDRESS]);
                 } else {
 
@@ -205,21 +194,25 @@ static void _nrf_write(void *opaque,
                     }
                     i2c_end_transfer(s->i2c_bus);
 
-                    MemTxResult result = address_space_rw(&s->downstream_as,
+                    (void)address_space_rw(&s->downstream_as,
                                                           s->regs[R_EDMA_RXD_PTR],
                                                           MEMTXATTRS_UNSPECIFIED,
                                                           s->rx_dma,
                                                           s->regs[R_EDMA_RXD_CNT],
                                                           true);
 
-                    ptimer_transaction_begin(s->ptimer);
-                    ptimer_stop(s->ptimer);
-                    ptimer_set_freq(s->ptimer, 100000);
-                    ptimer_set_count(s->ptimer, 64 + (s->regs[R_EDMA_RXD_CNT] << 3));
-                    ptimer_run(s->ptimer, 1);
-                    ptimer_transaction_commit(s->ptimer);
-                    (void)result;
+                    s->regs[R_EDMA_EVENT_LAST_RX] = 1;
+                    s->regs[R_EDMA_EVENT_ENDRX] = 1;
+                    s->regs[R_EDMA_RXD_AMOUNT] = s->regs[R_EDMA_RXD_CNT];
+                    s->regs[R_EDMA_RXD_CNT] = 0;
                 }
+
+                ptimer_transaction_begin(s->ptimer);
+                ptimer_stop(s->ptimer);
+                ptimer_set_freq(s->ptimer, 100000);
+                ptimer_set_count(s->ptimer, 64 + (s->regs[R_EDMA_RXD_CNT] << 3));
+                ptimer_run(s->ptimer, 1);
+                ptimer_transaction_commit(s->ptimer);
             }
             break;
 
@@ -234,13 +227,13 @@ static void _nrf_write(void *opaque,
 
                 MemTxResult result;
                 if (s->regs[R_EDMA_TXD_CNT]) {
-                    result = address_space_rw(&s->downstream_as,
+                    (void)address_space_rw(&s->downstream_as,
                                                           s->regs[R_EDMA_TXD_PTR],
                                                           MEMTXATTRS_UNSPECIFIED,
                                                           s->tx_dma,
                                                           s->regs[R_EDMA_TXD_CNT],
                                                           false);
-                    (void) result;
+
                 }
 
                 uint32_t length = s->regs[R_EDMA_TXD_CNT] > s->regs[R_EDMA_RXD_CNT] ?
@@ -327,6 +320,83 @@ static void _nrf_write(void *opaque,
     }
 
     nrf52832_edma_update_irq(s);
+}
+
+static uint64_t _nrf_read(void *opaque,
+                          hwaddr addr,
+                          unsigned size) {
+
+    uint64_t r;
+    EDMAState *s = NRF52832_EDMA(opaque);
+
+    if (s->deferred_transaction) {
+        uint32_t deferred_transaction = s->deferred_transaction;
+        s->deferred_transaction = 0;
+        // info_report("nrf52832.edma: deferred_transaction %lX", deferred_transaction);
+        _nrf_write(s, deferred_transaction, 1, 0);
+    }
+
+    //info_report("nrf52832.edma: _nrf_read %08lX", addr);
+
+    switch (addr) {
+        case A_EDMA_INTENSET:
+        case A_EDMA_INTENCLR:
+        case A_EDMA_INTEN:
+            r = s->regs[R_EDMA_INTEN];
+            break;
+        default:
+            r = s->regs[addr / 4];
+            break;
+    }
+
+    return r;
+
+}
+
+static void _shorts_process(EDMAState *s) {
+
+    if (s->regs[R_EDMA_EVENT_LAST_TX]) {
+
+        if (s->regs[R_EDMA_SHORTS] & R_EDMA_SHORTS_TWIM_LASTTX_STARTRX_MASK)
+        {
+            s->regs[R_EDMA_SHORTS] &= ~R_EDMA_SHORTS_TWIM_LASTTX_STARTRX_MASK;
+            // info_report("nrf52832.edma: _shorts_process -> STARTRX");
+            _nrf_write(s, A_EDMA_TASKS_START_TWI_RX, 1, 0);
+        }
+
+        if (s->regs[R_EDMA_SHORTS] & R_EDMA_SHORTS_TWIM_LASTTX_SUSPEND_MASK)
+        {
+            s->regs[R_EDMA_SHORTS] &= ~R_EDMA_SHORTS_TWIM_LASTTX_SUSPEND_MASK;
+            // info_report("nrf52832.edma: _shorts_process -> SUSPEND");
+            s->regs[R_EDMA_EVENT_SUSPENDED] = 1;
+        }
+
+        if (s->regs[R_EDMA_SHORTS] & R_EDMA_SHORTS_TWIM_LASTTX_STOP_MASK)
+        {
+            s->regs[R_EDMA_SHORTS] &= ~R_EDMA_SHORTS_TWIM_LASTTX_STOP_MASK;
+            // info_report("nrf52832.edma: _shorts_process -> STOP");
+            s->regs[R_EDMA_EVENT_STOPPED] = 1;
+        }
+
+    }
+
+    if (s->regs[R_EDMA_EVENT_LAST_RX]) {
+
+        if (s->regs[R_EDMA_SHORTS] & R_EDMA_SHORTS_TWIM_LASTRX_STARTTX_MASK)
+        {
+            s->regs[R_EDMA_SHORTS] &= ~R_EDMA_SHORTS_TWIM_LASTRX_STARTTX_MASK;
+            // info_report("nrf52832.edma: _shorts_process -> STARTTX");
+            _nrf_write(s, A_EDMA_TASKS_START_TWI_TX, 1, 0);
+        }
+
+        if (s->regs[R_EDMA_SHORTS] & R_EDMA_SHORTS_TWIM_LASTRX_STOP_MASK)
+        {
+            s->regs[R_EDMA_SHORTS] &= ~R_EDMA_SHORTS_TWIM_LASTRX_STOP_MASK;
+            // info_report("nrf52832.edma: _shorts_process -> STOP");
+            s->regs[R_EDMA_EVENT_STOPPED] = 1;
+        }
+
+    }
 }
 
 static void nrf52832_edma_reset(DeviceState *dev)

@@ -37,6 +37,8 @@ message(STATUS "[INFO] Found ${SRCS_count} source files.")
 
 include_directories(${CMAKE_CURRENT_SOURCE_DIR})
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/include)
+include_directories(${CMAKE_CURRENT_SOURCE_DIR}/dtc)
+include_directories(${CMAKE_CURRENT_SOURCE_DIR}/dtc/libfdt)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/${BUILD_DIR})
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/${BUILD_DIR}/arm/)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/tcg/arm/)
@@ -46,6 +48,14 @@ include_directories(${CMAKE_CURRENT_SOURCE_DIR}/target/arm)
 include_directories(${header_dir_list})
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/hw)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/hw/arm/)
+
+include_directories(C:/msys64/mingw64/include)
+
+include_directories(C:/msys64/mingw64/include/glib-2.0)
+include_directories(C:/msys64/mingw64/lib/glib-2.0/include)
+
+include_directories(C:/msys64/mingw64/include/pixman-1)
+include_directories(C:/msys64/mingw64/lib/pixman-1/include)
 
 include_directories(/usr/include/glib-2.0)
 include_directories(/usr/lib/x86_64-linux-gnu/glib-2.0/include)
