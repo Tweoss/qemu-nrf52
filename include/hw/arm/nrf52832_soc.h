@@ -13,6 +13,7 @@
 #include "hw/gpio/nrf52_gpiote.h"
 #include "hw/nvram/nrf51_nvm.h"
 #include "hw/timer/nrf51_timer.h"
+#include "hw/timer/nrf_clock.h"
 #include "hw/clock.h"
 #include "qom/object.h"
 #include "hw/dma/nrf52_edma.h"
@@ -35,7 +36,6 @@ struct NRF52832State {
     MemoryRegion iomem;
     MemoryRegion sram;
     MemoryRegion flash;
-    MemoryRegion clock;
 
     uint32_t sram_size;
     uint32_t flash_size;
@@ -50,6 +50,8 @@ struct NRF52832State {
     NRF51GPIOState  gpio;
 
     NRF52GPIOTEState  gpiote;
+
+    NRF52CLOCKState clock;
 
     EDMAState spim0_twim0;
     EDMAState spim1_twim1;

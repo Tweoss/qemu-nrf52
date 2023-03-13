@@ -23,6 +23,8 @@
 #define NRF52832_IOMEM_BASE      0x40000000
 #define NRF52832_IOMEM_SIZE      0x20000000
 
+#define NRF52832_CLOCK_BASE      0x40000000
+
 #define NRF52832_RADIO_BASE      0x40001000
 
 #define NRF52832_UART0_BASE      0x40002000
@@ -94,27 +96,6 @@ static const uint32_t timer__addr[] = {
 
 /* HCLK (the main CPU clock) on this SoC is always 64MHz */
 #define HCLK_FRQ 64000000
-
-
-
-static uint64_t clock_read(void *opaque, hwaddr addr, unsigned int size)
-{
-    qemu_log_mask(LOG_UNIMP, "%s: 0x%" HWADDR_PRIx " [%u]\n",
-                  __func__, addr, size);
-    return 1;
-}
-
-static void clock_write(void *opaque, hwaddr addr, uint64_t data,
-                        unsigned int size)
-{
-    qemu_log_mask(LOG_UNIMP, "%s: 0x%" HWADDR_PRIx " <- 0x%" PRIx64 " [%u]\n",
-                  __func__, addr, data, size);
-}
-
-static const MemoryRegionOps clock_ops = {
-        .read = clock_read,
-        .write = clock_write
-};
 
 
 
@@ -306,11 +287,13 @@ static void nrf52832_soc_realize(DeviceState *dev_soc, Error **errp)
                        qdev_get_gpio_in(DEVICE(&s->armv7m),
                                         BASE_TO_IRQ(NRF52832_RTC2_BASE)));
 
+    /* CLOCK */
+    if (!sysbus_realize(SYS_BUS_DEVICE(&s->clock), errp)) {
+        return;
+    }
+    sysbus_mmio_map(SYS_BUS_DEVICE(&s->clock), 0, NRF52832_CLOCK_BASE);
+
     /* STUB Peripherals */
-    memory_region_init_io(&s->clock, OBJECT(dev_soc), &clock_ops, NULL,
-                          "nrf52832_soc.clock", NRF52832_PERIPHERAL_SIZE);
-    memory_region_add_subregion_overlap(&s->container,
-                                        NRF52832_IOMEM_BASE, &s->clock, -1);
 
     create_unimplemented_device("nrf52832_soc.io", NRF52832_IOMEM_BASE,
                                 NRF52832_IOMEM_SIZE);
@@ -370,6 +353,8 @@ static void nrf52832_soc_init(Object *obj)
     object_initialize_child(obj, "gpio", &s->gpio, TYPE_NRF51_GPIO);
 
     object_initialize_child(obj, "gpiote", &s->gpiote, TYPE_NRF52_GPIOTE);
+
+    object_initialize_child(obj, "clock", &s->clock, TYPE_NRF52_CLOCK);
 
     for (i = 0; i < NRF52832_NUM_TIMERS; i++) {
         object_initialize_child(obj, "timer[*]", &s->timer[i],

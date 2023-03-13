@@ -67,7 +67,9 @@ add_definitions(-DCONFIG_DEVICES=\"arm-softmmu-config-devices.h\")
 
 add_library(${PROJECT_NAME}
         ${CMAKE_CURRENT_SOURCE_DIR}/hw/dma/nrf52_edma.c
+        ${CMAKE_CURRENT_SOURCE_DIR}/hw/char/nrf51_uart.c
         ${CMAKE_CURRENT_SOURCE_DIR}/hw/timer/nrf_rtc.c
+        ${CMAKE_CURRENT_SOURCE_DIR}/hw/timer/nrf_clock.c
         ${CMAKE_CURRENT_SOURCE_DIR}/hw/gpio/nrf52_gpiote.c
         ${CMAKE_CURRENT_SOURCE_DIR}/hw/sensor/lsm6dsox.c
         ${CMAKE_CURRENT_SOURCE_DIR}/hw/sensor/tmp421.c
@@ -78,7 +80,7 @@ add_library(${PROJECT_NAME}
 # Build on Windows
 add_custom_target(qemu_arm
         WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/${BUILD_DIR}
-        COMMAND C:/msys64/usr/bin/env MSYSTEM=MSYS /usr/bin/bash -here
+#        COMMAND C:/msys64/usr/bin/env MSYSTEM=MSYS /usr/bin/bash -here
         COMMAND make -j4
         )
 

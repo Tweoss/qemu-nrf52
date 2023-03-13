@@ -193,6 +193,16 @@ type_init(nrf52832DK_machine_init);
  *
  * ///////////////////////////////////////////////////////////////////////////////////////////////////
  *
+ *  ==>>  serial_hd(N)
+ *
+ *  -chardev serial,mux=on,path=//./COM25,id=s0 -serial chardev:s0 -serial mon:telnet::4444,server=on,wait=off
+ *
+ *  -serial chardev:s0 -chardev serial,path=//./COM20,id=s0
+ *
+ *  -chardev serial,path=//./COM25,id=s0 -serial chardev:s0
+ *
+ * ///////////////////////////////////////////////////////////////////////////////////////////////////
+ *
  * OS: Microsoft Windows 10 Home 64-bit
  *
  * https://stackoverflow.com/questions/53084815/compile-qemu-under-windows-10-64-bit-for-windows-10-64-bit
