@@ -3,6 +3,7 @@
 #include "qapi/error.h"
 #include "hw/boards.h"
 #include "hw/arm/boot.h"
+#include "hw/qdev-clock.h"
 #include "sysemu/sysemu.h"
 #include "exec/address-spaces.h"
 
@@ -28,20 +29,29 @@ struct nrf52832DKMachineState {
     NRF52832State nrf52832;
 };
 
+/* Main SYSCLK frequency in Hz (64MHz) */
+#define SYSCLK_FRQ 64000000ULL
+
 #define TYPE_NRF52832DK_MACHINE MACHINE_TYPE_NAME("nrf52832DK")
 
 OBJECT_DECLARE_SIMPLE_TYPE(nrf52832DKMachineState, NRF52832DK_MACHINE)
 
 static void nrf52832DK_init(MachineState *machine)
 {
+    Clock *sysclk;
     nrf52832DKMachineState *s = NRF52832DK_MACHINE(machine);
     MemoryRegion *system_memory = get_system_memory();
+
+    /* This clock doesn't need migration because it is fixed-frequency */
+    sysclk = clock_new(OBJECT(machine), "SYSCLK");
+    clock_set_hz(sysclk, SYSCLK_FRQ);
 
     object_initialize_child(OBJECT(machine), "nrf52832", &s->nrf52832,
                             TYPE_NRF52832_SOC);
     qdev_prop_set_chr(DEVICE(&s->nrf52832), "serial0", serial_hd(0));
     object_property_set_link(OBJECT(&s->nrf52832), "memory",
                              OBJECT(system_memory), &error_fatal);
+    qdev_connect_clock_in(DEVICE(&s->nrf52832), "sysclk", sysclk);
     sysbus_realize(SYS_BUS_DEVICE(&s->nrf52832), &error_fatal);
 
     armv7m_load_kernel(ARM_CPU(first_cpu), machine->kernel_filename,
@@ -200,6 +210,8 @@ type_init(nrf52832DK_machine_init);
  *  -serial chardev:s0 -chardev serial,path=//./COM20,id=s0
  *
  *  -chardev serial,path=//./COM25,id=s0 -serial chardev:s0
+ *
+ *  -chardev socket,id=s0,host=127.0.0.1,port=1235 -serial chardev:s0
  *
  * ///////////////////////////////////////////////////////////////////////////////////////////////////
  *

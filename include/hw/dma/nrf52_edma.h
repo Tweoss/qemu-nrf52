@@ -123,8 +123,8 @@ struct EDMAState {
 
     I2CBus *i2c_bus;
 
-    uint8_t rx_dma[256];
-    uint8_t tx_dma[256];
+    uint8_t rx_dma[64*1024];
+    uint8_t tx_dma[64*1024];
 
     uint32_t error;
 

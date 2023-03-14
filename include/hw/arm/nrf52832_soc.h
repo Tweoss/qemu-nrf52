@@ -64,6 +64,7 @@ struct NRF52832State {
     NRF5RtcState rtc2;
 
     Clock *sysclk;
+    Clock *refclk;
 };
 
 #endif //QEMU_NRF52_NRF52832_SOC_H

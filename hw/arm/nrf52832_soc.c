@@ -115,18 +115,18 @@ static void nrf52832_soc_realize(DeviceState *dev_soc, Error **errp)
      * HCLK on this SoC is fixed, so we set up sysclk ourselves and
      * the board shouldn't connect it.
      */
-    if (clock_has_source(s->sysclk)) {
-        error_setg(errp, "sysclk clock must not be wired up by the board code");
+    if (clock_has_source(s->refclk)) {
+        error_setg(errp, "refclk clock must not be wired up by the board code");
+        return;
+    }
+    if (!clock_has_source(s->sysclk)) {
+        error_setg(errp, "sysclk clock must be wired up by the board code");
         return;
     }
     /* This clock doesn't need migration because it is fixed-frequency */
     clock_set_hz(s->sysclk, HCLK_FRQ);
     qdev_connect_clock_in(DEVICE(&s->armv7m), "cpuclk", s->sysclk);
-    /*
-     * This SoC has no systick device, so don't connect refclk.
-     * TODO: model the lack of systick (currently the armv7m object
-     * will always provide one).
-     */
+    qdev_connect_clock_in(DEVICE(&s->armv7m), "refclk", s->refclk);
 
     object_property_set_link(OBJECT(&s->armv7m), "memory", OBJECT(&s->container),
                              &error_abort);
@@ -325,6 +325,29 @@ static void nrf52832_soc_realize(DeviceState *dev_soc, Error **errp)
     create_unimplemented_device("nrf52832_soc.uicr",
                                 NRF52832_UICR_BASE, 0x300);
 
+    /*
+     * We use s->refclk internally and only define it with qdev_init_clock_in()
+     * so it is correctly parented and not leaked on an init/deinit; it is not
+     * intended as an externally exposed clock.
+     */
+    if (clock_has_source(s->refclk)) {
+        error_setg(errp, "refclk clock must not be wired up by the board code");
+        return;
+    }
+
+    if (!clock_has_source(s->sysclk)) {
+        error_setg(errp, "sysclk clock must be wired up by the board code");
+        return;
+    }
+
+    /*
+     * TODO: ideally we should model the SoC RCC and its ability to
+     * change the sysclk frequency and define different sysclk sources.
+     */
+
+    /* The refclk always runs at frequency HCLK / 2 */
+    clock_set_mul_div(s->refclk, 2, 1);
+    clock_set_source(s->refclk, s->sysclk);
 }
 
 static void nrf52832_soc_init(Object *obj)
@@ -367,6 +390,7 @@ static void nrf52832_soc_init(Object *obj)
     object_initialize_child(obj, "rtc2", &s->rtc2, TYPE_NRF_RTC);
 
     s->sysclk = qdev_init_clock_in(DEVICE(s), "sysclk", NULL, NULL, 0);
+    s->refclk = qdev_init_clock_in(DEVICE(s), "refclk", NULL, NULL, 0);
 }
 
 static Property nrf52832_soc_properties[] = {

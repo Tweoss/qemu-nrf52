@@ -78,13 +78,13 @@ struct NRF51UARTState {
     qemu_irq irq;
     guint watch_tag;
 
-    uint8_t tx_dma[512];
+    uint8_t tx_dma[64*1024];
 
     uint8_t rx_fifo[UART_FIFO_LENGTH];
     unsigned int rx_fifo_pos;
     unsigned int rx_fifo_len;
 
-    uint32_t reg[0x56C];
+    uint32_t reg[0x600];
 
     bool rx_started;
     bool pending_tx_byte;
