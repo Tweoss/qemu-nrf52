@@ -20,6 +20,8 @@
 #define NRF52832_UICR_BASE       0x10001000
 #define NRF52832_SRAM_BASE       0x20000000
 
+#define NRF52832_DWT_BASE        0xE0001000
+
 #define NRF52832_IOMEM_BASE      0x40000000
 #define NRF52832_IOMEM_SIZE      0x20000000
 
@@ -97,7 +99,42 @@ static const uint32_t timer__addr[] = {
 /* HCLK (the main CPU clock) on this SoC is always 64MHz */
 #define HCLK_FRQ 64000000
 
+static uint64_t _dwt_read(void *opaque,
+                 hwaddr addr,
+                 unsigned size) {
 
+    static uint64_t ccycnt = 0;
+
+    // info_report("DWT access: offset 0x%x", (uint32_t)addr);
+
+    switch (addr) {
+        case 0x000:
+            break;
+        case 0x004:
+            return ++ccycnt;
+            break;
+        default:
+            break;
+    }
+
+    return 0;
+}
+
+static void _dwt_write(void *opaque,
+              hwaddr addr,
+              uint64_t data,
+              unsigned size) {
+
+    return;
+}
+
+static const MemoryRegionOps dwt_ops = {
+        .read = _dwt_read,
+        .write = _dwt_write,
+        .endianness = DEVICE_NATIVE_ENDIAN,
+        .valid.min_access_size = 1,
+        .valid.max_access_size = 8,
+};
 
 static void nrf52832_soc_realize(DeviceState *dev_soc, Error **errp)
 {
@@ -294,6 +331,9 @@ static void nrf52832_soc_realize(DeviceState *dev_soc, Error **errp)
     sysbus_mmio_map(SYS_BUS_DEVICE(&s->clock), 0, NRF52832_CLOCK_BASE);
 
     /* STUB Peripherals */
+
+    memory_region_init_io(&s->dwt, NULL, &dwt_ops, s, "nrf52832_soc.dwt", 0x100);
+    memory_region_add_subregion(&s->armv7m.container,  NRF52832_DWT_BASE, &s->dwt);
 
     create_unimplemented_device("nrf52832_soc.io", NRF52832_IOMEM_BASE,
                                 NRF52832_IOMEM_SIZE);

@@ -33,7 +33,6 @@ struct NRF52832State {
     /*< public >*/
     ARMv7MState armv7m;
 
-    MemoryRegion iomem;
     MemoryRegion sram;
     MemoryRegion flash;
 
@@ -43,6 +42,8 @@ struct NRF52832State {
     MemoryRegion *board_memory;
 
     MemoryRegion container;
+
+    MemoryRegion dwt;
 
     NRF51UARTState  uart;
     NRF51RNGState   rng;
