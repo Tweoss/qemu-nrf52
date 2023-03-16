@@ -96,18 +96,24 @@ static gboolean uart_transmit(void *do_not_use, GIOCondition cond, void *opaque)
 
     if (s->reg[R_UART_STARTTX] && s->reg[R_UART_TXD_MAXCNT]) { // EDMA way
 
-        MemTxResult result = address_space_rw(&s->downstream_as,
-                                              s->reg[R_UART_TXD_PTR],
-                                              MEMTXATTRS_UNSPECIFIED,
-                                              s->tx_dma,
-                                              s->reg[R_UART_TXD_MAXCNT],
-                                              false);
-        if (!result) {
-            (void)qemu_chr_fe_write(&s->chr, s->tx_dma, s->reg[R_UART_TXD_MAXCNT]);
+        int consumed = qemu_chr_fe_write(&s->chr, &s->tx_dma[s->reg[R_UART_TXD_AMOUNT]], s->reg[R_UART_TXD_MAXCNT]-s->reg[R_UART_TXD_AMOUNT]);
+        if (consumed+s->reg[R_UART_TXD_AMOUNT] != s->reg[R_UART_TXD_MAXCNT]) {
+            warn_report("nrf52832.uart0: consumed %d != %u", consumed+s->reg[R_UART_TXD_AMOUNT], s->reg[R_UART_TXD_MAXCNT]);
         } else {
-            error_report("nrf52832.uart0: address_space_rw error: %d", result);
+            goto buffer_drained;
         }
-        goto buffer_drained;
+
+        // not finished
+        s->watch_tag = qemu_chr_fe_add_watch(&s->chr, G_IO_OUT | G_IO_HUP,
+                                             uart_transmit, s);
+        if (!s->watch_tag) {
+            /* The hardware has no transmit error reporting,
+             * so silently drop the byte
+             */
+            goto buffer_drained;
+        }
+
+        return FALSE;
 
     } else if (s->pending_tx_byte) {
 
@@ -126,6 +132,8 @@ static gboolean uart_transmit(void *do_not_use, GIOCondition cond, void *opaque)
                 goto buffer_drained;
             }
             return FALSE;
+        } else {
+            s->pending_tx_byte = 0;
         }
     }
 
@@ -136,6 +144,29 @@ buffer_drained:
     s->reg[R_UART_TXDRDY] = 1;
     s->pending_tx_byte = false;
     return FALSE;
+}
+
+static void uart_transmit_prepare(NRF51UARTState *s) {
+
+    if (s->reg[R_UART_STARTTX] && s->reg[R_UART_TXD_MAXCNT]) { // EDMA way
+
+        MemTxResult result = address_space_rw(&s->downstream_as,
+                                              s->reg[R_UART_TXD_PTR],
+                                              MEMTXATTRS_UNSPECIFIED,
+                                              s->tx_dma,
+                                              s->reg[R_UART_TXD_MAXCNT],
+                                              false);
+
+        s->reg[R_UART_TXD_AMOUNT] = 0;
+
+        if (result) {
+            error_report("nrf52832.uart0: address_space_rw error: %d", result);
+            return;
+        }
+    }
+
+    uart_transmit(NULL, G_IO_OUT, s);
+
 }
 
 static void uart_cancel_transmit(NRF51UARTState *s)
@@ -162,7 +193,7 @@ static void uart_write(void *opaque, hwaddr addr,
         if (!s->pending_tx_byte && s->reg[R_UART_TXSTARTED]) {
             s->reg[R_UART_TXD] = value;
             s->pending_tx_byte = true;
-            uart_transmit(NULL, G_IO_OUT, s);
+            uart_transmit_prepare(s);
         }
         break;
     case A_UART_INTEN:
@@ -191,8 +222,10 @@ static void uart_write(void *opaque, hwaddr addr,
         s->reg[R_UART_STARTTX] = value;
         if (value == 1) {
             s->reg[R_UART_TXSTARTED] = 1;
-            uart_transmit(NULL, G_IO_OUT, s); // easy DMA start
+            info_report("nrf52832.uart0: STARTTX %u", s->reg[R_UART_TXD_MAXCNT]);
+            uart_transmit_prepare(s); // easy DMA start
         }
+        s->reg[R_UART_TXD_AMOUNT] = 0;
         break;
     case A_UART_STARTRX:
         s->reg[R_UART_STARTRX] = value;
@@ -291,17 +324,23 @@ static void uart_receive(void *opaque, const uint8_t *buf, int size)
         s->reg[R_UART_RXD_AMOUNT] += size;
         s->reg[R_UART_RXDRDY] = 1;
         if (s->reg[R_UART_RXD_AMOUNT] >= s->reg[R_UART_RXD_MAXCNT]) {
-            // warn_report("nrf52832.uart0: uart_trimming %d", s->reg[R_UART_RXD_AMOUNT] - s->reg[R_UART_RXD_MAXCNT]);
+            if (s->reg[R_UART_RXD_AMOUNT] > s->reg[R_UART_RXD_MAXCNT]) {
+                warn_report("nrf52832.uart0: uart_trimming %d", s->reg[R_UART_RXD_AMOUNT] - s->reg[R_UART_RXD_MAXCNT]);
+                s->reg[R_UART_RXD_AMOUNT] = s->reg[R_UART_RXD_MAXCNT];
+            }
+
             s->reg[R_UART_ENDRX] = 1;
-            s->reg[R_UART_RXD_AMOUNT] = s->reg[R_UART_RXD_MAXCNT];
-            s->reg[R_UART_STARTRX] = 0;
         }
+        s->reg[R_UART_STARTRX] = 0;
+
+        s->reg[R_UART_INTEN] |= R_UART_INTEN_RXTO_MASK;
+        s->reg[R_UART_RXTO] = 1; // artificially stop the RX
 
         (void) address_space_rw(&s->downstream_as,
                                 s->reg[R_UART_RXD_PTR],
                                 MEMTXATTRS_UNSPECIFIED,
                                 (void*)buf,
-                                s->reg[R_UART_RXD_MAXCNT],
+                                s->reg[R_UART_RXD_AMOUNT],
                                 true);
 
         s->rx_fifo_len = 0;
@@ -311,7 +350,7 @@ static void uart_receive(void *opaque, const uint8_t *buf, int size)
         nrf51_uart_update_irq(s);
     }
 
-    qemu_chr_fe_accept_input(&s->chr);
+    // qemu_chr_fe_accept_input(&s->chr);
 }
 
 static int uart_can_receive(void *opaque)
@@ -326,14 +365,14 @@ static int uart_can_receive(void *opaque)
         return s->reg[R_UART_RXD_MAXCNT];
     }
 
-    return 512; // random to empty the bytes
+    return 0; // random to empty the bytes
 }
 
 static void uart_event(void *opaque, QEMUChrEvent event)
 {
     NRF51UARTState *s = NRF51_UART(opaque);
 
-    // info_report("UARTE0 event %d", event);
+    info_report("UARTE0 event %d", event);
 
     if (event == CHR_EVENT_BREAK) {
 
