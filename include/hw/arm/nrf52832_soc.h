@@ -44,6 +44,8 @@ struct NRF52832State {
     MemoryRegion container;
 
     MemoryRegion dwt;
+    MemoryRegion rtt;
+    CharBackend rtt_chr;
 
     NRF51UARTState  uart;
     NRF51RNGState   rng;

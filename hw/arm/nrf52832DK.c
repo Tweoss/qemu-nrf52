@@ -49,6 +49,7 @@ static void nrf52832DK_init(MachineState *machine)
     object_initialize_child(OBJECT(machine), "nrf52832", &s->nrf52832,
                             TYPE_NRF52832_SOC);
     qdev_prop_set_chr(DEVICE(&s->nrf52832), "serial0", serial_hd(0));
+    qdev_prop_set_chr(DEVICE(&s->nrf52832), "serial1", serial_hd(1));
     object_property_set_link(OBJECT(&s->nrf52832), "memory",
                              OBJECT(system_memory), &error_fatal);
     qdev_connect_clock_in(DEVICE(&s->nrf52832), "sysclk", sysclk);

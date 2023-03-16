@@ -11,6 +11,8 @@
 #include "exec/address-spaces.h"
 #include "sysemu/blockdev.h"
 #include "hw/ssi/ssi.h"
+#include "sysemu/sysemu.h"
+#include "hw/qdev-properties-system.h"
 
 #define NRF52832_PERIPHERAL_SIZE 0x00001000
 
@@ -131,6 +133,52 @@ static void _dwt_write(void *opaque,
 static const MemoryRegionOps dwt_ops = {
         .read = _dwt_read,
         .write = _dwt_write,
+        .endianness = DEVICE_NATIVE_ENDIAN,
+        .valid.min_access_size = 1,
+        .valid.max_access_size = 8,
+};
+
+static uint64_t _rtt_read(void *opaque,
+                          hwaddr addr,
+                          unsigned size) {
+
+    static uint64_t ccycnt = 0;
+
+    info_report("RTT access1: offset 0x%x", (uint32_t)addr);
+
+    switch (addr) {
+        case 0x000:
+            break;
+        case 0x004:
+            return ++ccycnt;
+            break;
+        default:
+            break;
+    }
+
+    return 0;
+}
+
+static void _rtt_write(void *opaque,
+                       hwaddr addr,
+                       uint64_t data,
+                       unsigned size) {
+
+    NRF52832State *s = (NRF52832State *)opaque;
+
+    // info_report("RTT access: offset 0x%x", (uint32_t)addr);
+
+    if (addr == 0) {
+        uint8_t p_data[] = { (uint8_t)data };
+        qemu_chr_fe_write(&s->rtt_chr, p_data, 1);
+    }
+
+    return;
+}
+
+static const MemoryRegionOps rtt_ops = {
+        .read = _rtt_read,
+        .write = _rtt_write,
         .endianness = DEVICE_NATIVE_ENDIAN,
         .valid.min_access_size = 1,
         .valid.max_access_size = 8,
@@ -332,6 +380,10 @@ static void nrf52832_soc_realize(DeviceState *dev_soc, Error **errp)
 
     /* STUB Peripherals */
 
+    // Debug output
+    memory_region_init_io(&s->rtt, NULL, &rtt_ops, s, "nrf52832_soc.rtt", 0x100);
+    memory_region_add_subregion(&s->armv7m.container,  NRF52832_PRIVATE_BASE, &s->rtt);
+
     memory_region_init_io(&s->dwt, NULL, &dwt_ops, s, "nrf52832_soc.dwt", 0x100);
     memory_region_add_subregion(&s->armv7m.container,  NRF52832_DWT_BASE, &s->dwt);
 
@@ -403,7 +455,7 @@ static void nrf52832_soc_init(Object *obj)
     qdev_prop_set_uint32(DEVICE(&s->armv7m), "num-irq", 37);
 
     object_initialize_child(obj, "uart", &s->uart, TYPE_NRF51_UART);
-    object_property_add_alias(obj, "serial0", OBJECT(&s->uart), "chardev");
+    object_property_add_alias(obj, "serial1", OBJECT(&s->uart), "chardev");
 
     object_initialize_child(obj, "box0", &s->spim0_twim0, TYPE_NRF52832_EDMA);
     object_initialize_child(obj, "box1", &s->spim1_twim1, TYPE_NRF52832_EDMA);
@@ -429,6 +481,8 @@ static void nrf52832_soc_init(Object *obj)
     object_initialize_child(obj, "rtc1", &s->rtc1, TYPE_NRF_RTC);
     object_initialize_child(obj, "rtc2", &s->rtc2, TYPE_NRF_RTC);
 
+    object_property_add_alias(obj, "serial0", OBJECT(s), "rtt_chardev");
+
     s->sysclk = qdev_init_clock_in(DEVICE(s), "sysclk", NULL, NULL, 0);
     s->refclk = qdev_init_clock_in(DEVICE(s), "refclk", NULL, NULL, 0);
 }
@@ -439,13 +493,25 @@ static Property nrf52832_soc_properties[] = {
         DEFINE_PROP_UINT32("sram-size", NRF52832State, sram_size, NRF52832_SRAM_SIZE),
         DEFINE_PROP_UINT32("flash-size", NRF52832State, flash_size,
                            NRF52832_FLASH_SIZE),
+        DEFINE_PROP_CHR("rtt_chardev", NRF52832State, rtt_chr),
         DEFINE_PROP_END_OF_LIST(),
 };
+
+static void nrf52832_device_reset(DeviceState *dev) {
+
+    NRF52832State *s = NRF52832_SOC(dev);
+
+    qemu_chr_fe_set_open(&s->rtt_chr, 1);
+
+//    qemu_chr_fe_add_watch(&s->rtt_chr, G_IO_OUT | G_IO_HUP,
+//                          uart_transmit, s);
+}
 
 static void nrf52832_soc_class_init(ObjectClass *klass, void *data)
 {
     DeviceClass *dc = DEVICE_CLASS(klass);
 
+    dc->reset = nrf52832_device_reset;
     dc->realize = nrf52832_soc_realize;
     device_class_set_props(dc, nrf52832_soc_properties);
 }
