@@ -12,6 +12,7 @@
 #define NRF51_UART_H
 
 #include "hw/sysbus.h"
+#include "hw/ptimer.h"
 #include "chardev/char-fe.h"
 #include "hw/registerfields.h"
 #include "qom/object.h"
@@ -41,6 +42,8 @@ REG32(UART_RXTO, 0x144)
 
 REG32(UART_TXSTARTED, 0x150)
 REG32(UART_TXSTOPPED, 0x158)
+
+REG32(UART_SHORTS, 0x200)
 
 REG32(UART_INTEN, 0x300)
     FIELD(UART_INTEN, CTS, 0, 1)
@@ -98,6 +101,8 @@ struct NRF51UARTState {
 //    bool rx_started;
     bool pending_tx_byte;
     bool enabled;
+
+    ptimer_state *ptimer;
 
     MemoryRegion *downstream;
     AddressSpace downstream_as;

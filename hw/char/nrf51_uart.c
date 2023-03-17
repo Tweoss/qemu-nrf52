@@ -40,9 +40,9 @@ static void nrf51_uart_update_irq(NRF51UARTState *s)
     irq |= (s->reg[R_UART_RXTO]   &&
             (s->reg[R_UART_INTEN] & R_UART_INTEN_RXTO_MASK));
 
-    if (irq) {
-        info_report("nrf52832.uart0: irq");
-    }
+//    if (irq) {
+//        info_report("nrf52832.uart0: irq");
+//    }
 
     qemu_set_irq(s->irq, irq);
 }
@@ -97,23 +97,32 @@ static gboolean uart_transmit(void *do_not_use, GIOCondition cond, void *opaque)
     if (s->reg[R_UART_STARTTX] && s->reg[R_UART_TXD_MAXCNT]) { // EDMA way
 
         int consumed = qemu_chr_fe_write(&s->chr, &s->tx_dma[s->reg[R_UART_TXD_AMOUNT]], s->reg[R_UART_TXD_MAXCNT]-s->reg[R_UART_TXD_AMOUNT]);
-        if (consumed+s->reg[R_UART_TXD_AMOUNT] != s->reg[R_UART_TXD_MAXCNT]) {
+
+        if (consumed + s->reg[R_UART_TXD_AMOUNT] < s->reg[R_UART_TXD_MAXCNT]) {
             warn_report("nrf52832.uart0: consumed %d != %u", consumed+s->reg[R_UART_TXD_AMOUNT], s->reg[R_UART_TXD_MAXCNT]);
-        } else {
-            goto buffer_drained;
         }
 
-        // not finished
-        s->watch_tag = qemu_chr_fe_add_watch(&s->chr, G_IO_OUT | G_IO_HUP,
-                                             uart_transmit, s);
-        if (!s->watch_tag) {
-            /* The hardware has no transmit error reporting,
-             * so silently drop the byte
-             */
-            goto buffer_drained;
+        if (consumed > 0) {
+            s->reg[R_UART_TXD_AMOUNT] += consumed;
         }
 
-        return FALSE;
+        if (s->reg[R_UART_TXD_AMOUNT] < s->reg[R_UART_TXD_MAXCNT]) {
+
+            // not finished
+            s->watch_tag = qemu_chr_fe_add_watch(&s->chr, G_IO_OUT | G_IO_HUP,
+                                                 uart_transmit, s);
+            if (!s->watch_tag) {
+                /* The hardware has no transmit error reporting,
+                 * so silently drop the byte
+                 */
+                error_report("nrf52832.uart0: failed qemu_chr_fe_add_watch");
+                goto buffer_drained;
+            }
+
+            return FALSE;
+        }
+
+        goto buffer_drained;
 
     } else if (s->pending_tx_byte) {
 
@@ -129,6 +138,7 @@ static gboolean uart_transmit(void *do_not_use, GIOCondition cond, void *opaque)
                 /* The hardware has no transmit error reporting,
                  * so silently drop the byte
                  */
+                error_report("nrf52832.uart0: failed qemu_chr_fe_add_watch");
                 goto buffer_drained;
             }
             return FALSE;
@@ -138,15 +148,27 @@ static gboolean uart_transmit(void *do_not_use, GIOCondition cond, void *opaque)
     }
 
 buffer_drained:
+//    info_report("nrf52832.uart0: TX done");
     s->reg[R_UART_TXD_AMOUNT] = s->reg[R_UART_TXD_MAXCNT];
     s->reg[R_UART_TXD_MAXCNT] = 0;
     s->reg[R_UART_ENDTX] = 1;
     s->reg[R_UART_TXDRDY] = 1;
     s->pending_tx_byte = false;
+
+    qemu_set_irq(s->irq, 1); // force IRQ
+
     return FALSE;
 }
 
+static void timer_hit(void *opaque) {
+
+    uart_transmit(NULL, G_IO_OUT, opaque);
+}
+
 static void uart_transmit_prepare(NRF51UARTState *s) {
+
+    s->reg[R_UART_TXD_AMOUNT] = 0;
+    s->reg[R_UART_TXDRDY] = 0;
 
     if (s->reg[R_UART_STARTTX] && s->reg[R_UART_TXD_MAXCNT]) { // EDMA way
 
@@ -157,15 +179,18 @@ static void uart_transmit_prepare(NRF51UARTState *s) {
                                               s->reg[R_UART_TXD_MAXCNT],
                                               false);
 
-        s->reg[R_UART_TXD_AMOUNT] = 0;
-
         if (result) {
             error_report("nrf52832.uart0: address_space_rw error: %d", result);
             return;
         }
-    }
 
-    uart_transmit(NULL, G_IO_OUT, s);
+        ptimer_transaction_begin(s->ptimer);
+        ptimer_stop(s->ptimer);
+        ptimer_set_freq(s->ptimer, 10000);
+        ptimer_set_count(s->ptimer, 64 + (s->reg[R_UART_TXD_MAXCNT] << 3));
+        ptimer_run(s->ptimer, 1);
+        ptimer_transaction_commit(s->ptimer);
+    }
 
 }
 
@@ -205,9 +230,6 @@ static void uart_write(void *opaque, hwaddr addr,
     case A_UART_INTENCLR:
         s->reg[R_UART_INTEN] &= ~value;
         break;
-//    case A_UART_TXDRDY ... A_UART_RXTO:
-//        s->reg[addr / 4] = value;
-//        break;
     case A_UART_ERRORSRC:
         s->reg[addr / 4] &= ~value;
         break;
@@ -218,14 +240,17 @@ static void uart_write(void *opaque, hwaddr addr,
             s->reg[R_UART_RXDRDY] = 0;
         }
         break;
+    case A_UART_SHORTS:
+        s->reg[R_UART_SHORTS] = value;
+        warn_report("nrf52832.uart0: SHORTS not implemented");
+        break;
     case A_UART_STARTTX:
         s->reg[R_UART_STARTTX] = value;
         if (value == 1) {
             s->reg[R_UART_TXSTARTED] = 1;
-            info_report("nrf52832.uart0: STARTTX %u", s->reg[R_UART_TXD_MAXCNT]);
-            uart_transmit_prepare(s); // easy DMA start
+//            info_report("nrf52832.uart0: STARTTX %u - INT 0x%02X", s->reg[R_UART_TXD_MAXCNT], s->reg[R_UART_INTEN]);
         }
-        s->reg[R_UART_TXD_AMOUNT] = 0;
+        uart_transmit_prepare(s); // easy DMA start
         break;
     case A_UART_STARTRX:
         s->reg[R_UART_STARTRX] = value;
@@ -305,7 +330,7 @@ static void uart_receive(void *opaque, const uint8_t *buf, int size)
     NRF51UARTState *s = NRF51_UART(opaque);
     int i;
 
-    info_report("nrf52832.uart0: uart_receive %d (started= %d)", size, s->reg[R_UART_STARTRX]);
+//    info_report("nrf52832.uart0: uart_receive %d (started= %d)", size, s->reg[R_UART_STARTRX]);
 
     if (size == 0) {
         return;
@@ -345,7 +370,6 @@ static void uart_receive(void *opaque, const uint8_t *buf, int size)
 
         s->rx_fifo_len = 0;
         s->rx_fifo_pos = 0;
-        //s->rx_started = false;
 
         nrf51_uart_update_irq(s);
     }
@@ -390,6 +414,8 @@ static void nrf51_uart_realize(DeviceState *dev, Error **errp)
 
     qemu_chr_fe_set_handlers(&s->chr, uart_can_receive, uart_receive,
                              uart_event, NULL, s, NULL, false);
+
+    s->ptimer = ptimer_init(timer_hit, s, PTIMER_POLICY_DEFAULT);
 
     if (!s->downstream) {
         error_report("UARTE0 'downstream' link not set");
