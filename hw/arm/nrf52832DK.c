@@ -20,6 +20,8 @@
 #define MAX_SS1_PIN           NRF_GPIO_PIN_MAP(0, 31)
 #define MAX_SS2_PIN           NRF_GPIO_PIN_MAP(0, 30)
 
+#define LIS12_DRDY               NRF_GPIO_PIN_MAP(0, 28)
+
 #define BMP390_DRDY1             NRF_GPIO_PIN_MAP(0, 11)
 #define BMP390_DRDY2             NRF_GPIO_PIN_MAP(0, 12)
 
@@ -135,9 +137,9 @@ static void nrf52832DK_init(MachineState *machine)
 
     /* add a first BMP390 pressure sensor */
     {
-        void *i2c_bus = qdev_get_child_bus(DEVICE(&s->nrf52832.spim1_twim1), "i2c");
+        void *i2c_bus = qdev_get_child_bus(DEVICE(&s->nrf52832.spim0_twim0), "i2c");
         assert(i2c_bus);
-        I2CSlave *dev = i2c_slave_new("bmp390", (0x77 << 0u));
+        I2CSlave *dev = i2c_slave_new("bmp390", 0x77);
         // connect Z model
         object_property_set_link(OBJECT(&dev->qdev), "model",
                                  OBJECT(model), &error_fatal);
@@ -150,9 +152,9 @@ static void nrf52832DK_init(MachineState *machine)
 
     /* add a second BMP390 pressure sensor */
     {
-        void *i2c_bus = qdev_get_child_bus(DEVICE(&s->nrf52832.spim1_twim1), "i2c");
+        void *i2c_bus = qdev_get_child_bus(DEVICE(&s->nrf52832.spim0_twim0), "i2c");
         assert(i2c_bus);
-        I2CSlave *dev = i2c_slave_new("bmp390", (0x76 << 0u));
+        I2CSlave *dev = i2c_slave_new("bmp390", 0x76);
         // connect Z model
         object_property_set_link(OBJECT(&dev->qdev), "model",
                                  OBJECT(model), &error_fatal);
@@ -160,6 +162,21 @@ static void nrf52832DK_init(MachineState *machine)
         i2c_slave_realize_and_unref(dev, i2c_bus, &error_abort);
         // connect DRDY
         qemu_irq int1_line = qdev_get_gpio_in(DEVICE(&s->nrf52832), BMP390_DRDY2);
+        qdev_connect_gpio_out_named(&dev->qdev, "DRDY", 0, int1_line);
+    }
+
+    /* add a LIS12 pressure sensor */
+    {
+        void *i2c_bus = qdev_get_child_bus(DEVICE(&s->nrf52832.spim1_twim1), "i2c");
+        assert(i2c_bus);
+        I2CSlave *dev = i2c_slave_new("lsm6dw12", 0b0011000);
+        // connect Z model
+        object_property_set_link(OBJECT(&dev->qdev), "model",
+                                 OBJECT(model), &error_fatal);
+        // init it
+        i2c_slave_realize_and_unref(dev, i2c_bus, &error_abort);
+        // connect DRDY
+        qemu_irq int1_line = qdev_get_gpio_in(DEVICE(&s->nrf52832), LIS12_DRDY);
         qdev_connect_gpio_out_named(&dev->qdev, "DRDY", 0, int1_line);
     }
 }

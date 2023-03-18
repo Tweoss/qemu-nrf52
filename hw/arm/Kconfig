@@ -508,6 +508,7 @@ config NRF52832DK
     select NRF52832_SOC
     select MAX11254
     select BMP3
+    select LIS2DW12
 
 config NRF52832_SOC
     bool

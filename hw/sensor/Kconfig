@@ -8,6 +8,11 @@ config LSM6DSOX
     depends on I2C
     default y if I2C_DEVICES
 
+config LIS2DW12
+    bool
+    depends on I2C
+    default y if I2C_DEVICES
+
 config TMP421
     bool
     depends on I2C
