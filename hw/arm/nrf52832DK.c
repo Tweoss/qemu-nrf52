@@ -137,7 +137,7 @@ static void nrf52832DK_init(MachineState *machine)
 
     /* add a first BMP390 pressure sensor */
     {
-        void *i2c_bus = qdev_get_child_bus(DEVICE(&s->nrf52832.spim0_twim0), "i2c");
+        void *i2c_bus = qdev_get_child_bus(DEVICE(&s->nrf52832.spim1_twim1), "i2c");
         assert(i2c_bus);
         I2CSlave *dev = i2c_slave_new("bmp390", 0x77);
         // connect Z model
@@ -152,7 +152,7 @@ static void nrf52832DK_init(MachineState *machine)
 
     /* add a second BMP390 pressure sensor */
     {
-        void *i2c_bus = qdev_get_child_bus(DEVICE(&s->nrf52832.spim0_twim0), "i2c");
+        void *i2c_bus = qdev_get_child_bus(DEVICE(&s->nrf52832.spim1_twim1), "i2c");
         assert(i2c_bus);
         I2CSlave *dev = i2c_slave_new("bmp390", 0x76);
         // connect Z model
@@ -167,9 +167,9 @@ static void nrf52832DK_init(MachineState *machine)
 
     /* add a LIS12 pressure sensor */
     {
-        void *i2c_bus = qdev_get_child_bus(DEVICE(&s->nrf52832.spim1_twim1), "i2c");
+        void *i2c_bus = qdev_get_child_bus(DEVICE(&s->nrf52832.spim0_twim0), "i2c");
         assert(i2c_bus);
-        I2CSlave *dev = i2c_slave_new("lsm6dw12", 0b0011000);
+        I2CSlave *dev = i2c_slave_new("lis2dw12", 0b0011000);
         // connect Z model
         object_property_set_link(OBJECT(&dev->qdev), "model",
                                  OBJECT(model), &error_fatal);

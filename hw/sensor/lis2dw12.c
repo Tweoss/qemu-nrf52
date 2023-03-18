@@ -14,7 +14,7 @@
 #include "hw/i2c/i2c.h"
 
 
-#define TYPE_LSM6DW12 "lsm6dw12"
+#define TYPE_LSM6DW12 "lis2dw12"
 OBJECT_DECLARE_SIMPLE_TYPE(lis12_state, LSM6DW12)
 
 #define FIFO_SIZE      256
@@ -26,7 +26,8 @@ typedef struct __attribute((packed)) {
 } sLSMfifo;
 
 struct lis12_state {
-    SSIPeripheral parent_obj;
+
+    I2CSlave i2c;
 
     qemu_irq int1[1];
 
@@ -53,6 +54,8 @@ struct lis12_state {
     z_model_state *p_model;
 };
 
+#define LIS2DW12_FROM_FS_8g_LP1_TO_mg(lsb)  (float)((int16_t)lsb>>4)* 3.904f
+
 REG8(LSM_INT1_CTRL, 0x0D)
     FIELD(LSM_INT1_CTRL, FIFO, 3, 3)
 
@@ -73,6 +76,8 @@ REG8(LSM_STATUS, 0x27U)
     FIELD(LSM_STATUS, DRDY, 0, 1)
 
 REG8(LIS2DW12_OUT_X_L, 0x28U)
+REG8(LIS2DW12_OUT_Y_L, 0x2AU)
+REG8(LIS2DW12_OUT_Z_L, 0x2CU)
 REG8(LIS2DW12_OUT_Z_H, 0x2DU)
 
 static void timer_hit(void *opaque)
@@ -82,11 +87,8 @@ static void timer_hit(void *opaque)
     z_model_acc p_acc[1];
     z_model__compute_acc(s->p_model, p_acc);
 
-    if (s->uses_int1 &&
-        (s->regs[R_LSM_STATUS] & R_LSM_STATUS_DRDY_MASK)) {
+    if (s->uses_int1) {
         qemu_set_irq(s->int1[0], true);
-    } else {
-        qemu_set_irq(s->int1[0], false);
     }
 
 }
@@ -120,7 +122,6 @@ static void lis12_write(struct lis12_state *s, uint8_t data)
 
             case A_LSM_CTRL4:
                 if (data & R_LSM_CTRL4_INT1_DRDY_MASK) {
-                    s->uses_int1 = true;
                     info_report("INT enabled !");
                     ptimer_transaction_begin(s->ptimer);
                     ptimer_stop(s->ptimer);
@@ -129,6 +130,7 @@ static void lis12_write(struct lis12_state *s, uint8_t data)
                     ptimer_set_limit(s->ptimer, 1, 1);
                     ptimer_run(s->ptimer, 0);
                     ptimer_transaction_commit(s->ptimer);
+                    s->uses_int1 = true;
                 } else {
                     s->uses_int1 = false;
                     ptimer_transaction_begin(s->ptimer);
@@ -147,7 +149,7 @@ static int lis12_tx(I2CSlave *i2c, uint8_t data)
 {
     struct lis12_state *s = LSM6DW12(i2c);
 
-    info_report("lis12: lis12_tx 0x%02X (pos=%u)", data, s->len);
+//    info_report("lis12: lis12_tx 0x%02X (pos=%u)", data, s->len);
 
     if (s->len == 0) {
         /* first byte is the register pointer for a read or write
@@ -163,8 +165,6 @@ static int lis12_tx(I2CSlave *i2c, uint8_t data)
 
 static void lis12_read_events_process(struct lis12_state *s)
 {
-
-    info_report("lis12: Device read reg= %02X", s->pointer);
 
     switch (s->pointer) {
 
@@ -183,6 +183,7 @@ static uint8_t lis12_rx(I2CSlave *i2c)
 
     if (s->pointer + s->len < sizeof(s->regs)) {
         uint8_t ret = s->regs[s->pointer + s->len];
+//        info_report("lis12: Device read reg= 0x%02X val=0x%02X", s->pointer, ret);
         lis12_read_events_process(s);
         s->len++;
         return ret;
@@ -223,6 +224,14 @@ static void lis12_reset(struct lis12_state *s)
 
     s->pending_clear = false;
 
+    s->regs[R_LSM_WHO_AM_I] = 0x44u;
+    s->regs[A_LSM_CTRL2] = 0x00u;
+
+    int16_t acc_z = (-1000.f / 3.904f) * (1 << 4u);
+
+    s->regs[R_LIS2DW12_OUT_Z_L] = (uint8_t)((uint16_t)acc_z & 0xFF);
+    s->regs[R_LIS2DW12_OUT_Z_H] = (uint8_t)(((uint16_t)acc_z & 0xFF00) >> 8u);
+
     info_report("Device reset");
 }
 
@@ -244,7 +253,6 @@ static const VMStateDescription vmstate_ssi_lis12 = {
         .minimum_version_id = 1,
         .post_load = lis12_post_load,
         .fields = (VMStateField[]) {
-                VMSTATE_SSI_PERIPHERAL(parent_obj, lis12_state),
                 VMSTATE_END_OF_LIST()
         },
 };
@@ -284,7 +292,7 @@ static void lis12_class_init(ObjectClass *klass, void *data)
 
 static const TypeInfo lis12_info = {
         .name          = TYPE_LSM6DW12,
-        .parent        = TYPE_SSI_PERIPHERAL,
+        .parent        = TYPE_I2C_SLAVE,
         .instance_size = sizeof(lis12_state),
         .class_size    = sizeof(lis12_state),
         .instance_init = lis12_instance_init,
