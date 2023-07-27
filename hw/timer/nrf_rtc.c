@@ -184,8 +184,11 @@ static uint64_t _nrf_read(void *opaque,
             break;
 
         case A_RTC_CTR:
+        {
+            int64_t now = qemu_clock_get_ns(QEMU_CLOCK_VIRTUAL);
+            (void)update_counter(s, now);
             r = s->counter;
-            break;
+        }   break;
 
         default:
             r = s->regs[addr / 4];
@@ -326,12 +329,12 @@ static void nrf_rtcinit(Object *obj)
 {
 //    NRF5RtcState *s = NRF_RTC(obj);
 //    SysBusDevice *sbd = SYS_BUS_DEVICE(obj);
-//
+
 //    memory_region_init_io(&s->iomem, obj, &rtc_ops, s,
 //                          TYPE_NRF_RTC, NRF_RTC_PER_SIZE);
 //    sysbus_init_mmio(sbd, &s->iomem);
 //    sysbus_init_irq(sbd, &s->irq);
-//
+
 //    timer_init_ns(&s->timer, QEMU_CLOCK_VIRTUAL, timer_expire, s);
 }
 
