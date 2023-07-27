@@ -206,7 +206,9 @@ type_init(nrf52832DK_machine_init);
 
 /**
  *
- * ../configure --target-list=arm-softmmu
+ * mkdir build && cd build/
+ *
+ * ../configure --target-list=arm-softmmu --disable-werror
  *
  * In order to use a .img SD card image, you can first format it on the host (https://www.linux.org/threads/qemu.10727/)
  * mkfs.vfat -S 512 -F 32 ../sd0.img
