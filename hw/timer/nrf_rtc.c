@@ -57,6 +57,17 @@ static uint32_t update_counter(NRF5RtcState *s, int64_t now)
     return ticks;
 }
 
+/* Returns number of ticks since last call */
+static uint32_t get_counter(NRF5RtcState *s, int64_t now)
+{
+    uint32_t ticks = ns_to_ticks(s, now - s->update_counter_ns);
+    if (!s->running) {
+        ticks = 0;
+    }
+    uint32_t counter = (s->counter + ticks) % BIT(TIMER_BITWIDTH);
+    return counter;
+}
+
 /* Assumes s->counter is up-to-date */
 static void rearm_timer(NRF5RtcState *s, int64_t now)
 {
@@ -186,8 +197,7 @@ static uint64_t _nrf_read(void *opaque,
         case A_RTC_CTR:
         {
             int64_t now = qemu_clock_get_ns(QEMU_CLOCK_VIRTUAL);
-            (void)update_counter(s, now);
-            r = s->counter;
+            r = get_counter(s, now);
         }   break;
 
         default:
