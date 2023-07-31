@@ -105,16 +105,22 @@ static uint64_t _dwt_read(void *opaque,
                  hwaddr addr,
                  unsigned size) {
 
-    static uint64_t ccycnt = 0;
+    static int64_t ccycnt = 0;
 
     // info_report("DWT access: offset 0x%x", (uint32_t)addr);
 
     switch (addr) {
         case 0x000:
             break;
-        case 0x004:
-            return ++ccycnt;
-            break;
+        case 0x004: // Cortex-M cycle counter
+        {
+            if (ccycnt == 0) {
+                ccycnt = qemu_clock_get_ns(QEMU_CLOCK_VIRTUAL);
+            }
+            int64_t now = qemu_clock_get_ns(QEMU_CLOCK_VIRTUAL);
+            uint32_t ticks = muldiv64(now - ccycnt, HCLK_FRQ, NANOSECONDS_PER_SECOND);
+            return ticks;
+        }   break;
         default:
             break;
     }
