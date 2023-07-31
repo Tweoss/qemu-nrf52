@@ -46,6 +46,10 @@ struct NRF52832State {
     MemoryRegion dwt;
     MemoryRegion rtt;
     CharBackend rtt_chr;
+    uint32_t rtt_buffer_down_len;
+    uint8_t rtt_buffer_down[512];
+    uint32_t rtt_buffer_up_len;
+    uint8_t rtt_buffer_up[512];
 
     NRF51UARTState  uart;
     NRF51RNGState   rng;

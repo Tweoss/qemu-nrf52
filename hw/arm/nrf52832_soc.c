@@ -142,21 +142,30 @@ static uint64_t _rtt_read(void *opaque,
                           hwaddr addr,
                           unsigned size) {
 
+    NRF52832State *s = (NRF52832State *)opaque;
+
     static uint64_t ccycnt = 0;
 
-    info_report("RTT access1: offset 0x%x", (uint32_t)addr);
+    uint64_t val = 0;
+
+    // info_report("RTT access1: offset 0x%x", (uint32_t)addr);
 
     switch (addr) {
-        case 0x000:
+        case 0x000: // buffer down length
+            val = s->rtt_buffer_down_len;
             break;
-        case 0x004:
-            return ++ccycnt;
+        case 0x004: // buffer data FIFO
+            val = s->rtt_buffer_down[ccycnt++];
+            if (ccycnt >= sizeof(s->rtt_buffer_down)) {
+                ccycnt = 0;
+                s->rtt_buffer_down_len = 0;
+            }
             break;
         default:
             break;
     }
 
-    return 0;
+    return val;
 }
 
 static void _rtt_write(void *opaque,
@@ -171,9 +180,43 @@ static void _rtt_write(void *opaque,
     if (addr == 0) {
         uint8_t p_data[] = { (uint8_t)data };
         qemu_chr_fe_write(&s->rtt_chr, p_data, 1);
+    } else if (addr == 4) {
+        s->rtt_buffer_up[s->rtt_buffer_up_len++] = (uint8_t)data;
+        if (s->rtt_buffer_up_len >= sizeof(s->rtt_buffer_up)) {
+            s->rtt_buffer_up_len = 0;
+        }
+    } else if (addr == 8) {
+        // info_report("Sending %u RTT bytes", s->rtt_buffer_up_len);
+        qemu_chr_fe_write(&s->rtt_chr, s->rtt_buffer_up, s->rtt_buffer_up_len);
+        s->rtt_buffer_up_len = 0;
     }
 
     return;
+}
+
+
+static void _rtt_receive(void *opaque, const uint8_t *buf, int size)
+{
+
+    NRF52832State *s = (NRF52832State *)opaque;
+
+    // info_report("Received %u bytes", size);
+
+    if (size > sizeof(s->rtt_buffer_down)) {
+        size = sizeof(s->rtt_buffer_down);
+    }
+
+    memcpy(s->rtt_buffer_down, buf, size);
+    s->rtt_buffer_down_len = size;
+
+    // qemu_chr_fe_accept_input(&s->chr);
+}
+
+static int _rtt_can_receive(void *opaque)
+{
+    NRF52832State *s = (NRF52832State *)opaque;
+
+    return s->rtt_buffer_down_len == 0 ? sizeof(s->rtt_buffer_down) : 0;
 }
 
 static const MemoryRegionOps rtt_ops = {
@@ -485,6 +528,9 @@ static void nrf52832_soc_init(Object *obj)
 
     s->sysclk = qdev_init_clock_in(DEVICE(s), "sysclk", NULL, NULL, 0);
     s->refclk = qdev_init_clock_in(DEVICE(s), "refclk", NULL, NULL, 0);
+
+    s->rtt_buffer_down_len = 0;
+    s->rtt_buffer_up_len = 0;
 }
 
 static Property nrf52832_soc_properties[] = {
@@ -502,6 +548,10 @@ static void nrf52832_device_reset(DeviceState *dev) {
     NRF52832State *s = NRF52832_SOC(dev);
 
     qemu_chr_fe_set_open(&s->rtt_chr, 1);
+
+    qemu_chr_fe_set_handlers(&s->rtt_chr, _rtt_can_receive,
+                             _rtt_receive, NULL, NULL,
+                             s, NULL, true);
 
 //    qemu_chr_fe_add_watch(&s->rtt_chr, G_IO_OUT | G_IO_HUP,
 //                          uart_transmit, s);
