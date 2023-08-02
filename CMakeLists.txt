@@ -1,12 +1,13 @@
 cmake_minimum_required (VERSION 3.15)
 
-project (qemu-nrf52 LANGUAGES C CXX)
+project (qemu-nrf52-wrapper LANGUAGES C CXX)
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS      ON)
 
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11")
 
 set(BUILD_DIR     "build")
+set(MINGW_PREFIX  C:/ISIS/msys64)
 
 MACRO(HEADER_DIRECTORIES return_list)
     FILE(GLOB_RECURSE new_list "${CMAKE_CURRENT_SOURCE_DIR}/hw/*.h")
@@ -49,13 +50,14 @@ include_directories(${header_dir_list})
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/hw)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/hw/arm/)
 
-include_directories(C:/msys64/mingw64/include)
+include_directories(${MINGW_PREFIX}/mingw64/include)
 
-include_directories(C:/msys64/mingw64/include/glib-2.0)
-include_directories(C:/msys64/mingw64/lib/glib-2.0/include)
+include_directories(${MINGW_PREFIX}/mingw64/include/glib-2.0)
+#include_directories(${MINGW_PREFIX}/mingw64/include/glib-2.0/include)
+include_directories(${MINGW_PREFIX}/mingw64/lib/glib-2.0/include)
 
-include_directories(C:/msys64/mingw64/include/pixman-1)
-include_directories(C:/msys64/mingw64/lib/pixman-1/include)
+include_directories(${MINGW_PREFIX}/mingw64/include/pixman-1)
+include_directories(${MINGW_PREFIX}/mingw64/lib/pixman-1/include)
 
 include_directories(/usr/include/glib-2.0)
 include_directories(/usr/lib/x86_64-linux-gnu/glib-2.0/include)
@@ -79,13 +81,28 @@ add_library(${PROJECT_NAME}
         ${SRCS})
 
 # Build on Windows
-add_custom_target(qemu_arm
-        WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/${BUILD_DIR}
-#        COMMAND C:/msys64/usr/bin/env MSYSTEM=MSYS /usr/bin/bash -here
-        COMMAND make -j4
-        )
+include(ExternalProject)
 
-#install(TARGETS qemu_arm
-#        #CONFIGURATIONS Release
-#        DESTINATION ${CMAKE_INSTALL_BINDIR}
-#        )
+find_program (MINGW_W64 mingw64.exe ${MINGW_PREFIX})
+find_program (MINGW_BAT msys2_shell.cmd ${MINGW_PREFIX})
+
+if (NOT EXISTS ${MINGW_PREFIX}/mingw64.exe)
+    message(FATAL_ERROR "Please adjust your MINGW_PREFIX variable")
+endif()
+
+#message("MingW: ${MINGW_W64}")
+
+set(MINGW_PATH "/mingw64/bin:/usr/local/bin:/usr/bin:/bin:/c/Windows/System32:/c/Windows:/c/Windows/System32/Wbem:/c/Windows/System32/WindowsPowerShell/v1.0/:/usr/bin/site_perl:/usr/bin/vendor_perl:/usr/bin/core_perl")
+
+ExternalProject_Add(qemu-nrf52
+        DOWNLOAD_COMMAND ""
+        SOURCE_DIR        ${CMAKE_CURRENT_SOURCE_DIR}/build
+        CONFIGURE_COMMAND ""
+#        BUILD_COMMAND cmd.exe /c set MSYSTEM=MINGW64 && ${MINGW_PREFIX}/usr/bin/bash --login -c "export PATH=${MINGW_PATH} && cd <SOURCE_DIR> &&pwd" # test command
+        BUILD_COMMAND cmd.exe /c set MSYSTEM=MINGW64 && ${MINGW_PREFIX}/usr/bin/bash --login -c "export PATH=${MINGW_PATH} && cd <SOURCE_DIR> && make -j4 -k"
+        BUILD_IN_SOURCE TRUE
+        UPDATE_COMMAND    ""
+        INSTALL_COMMAND   ""
+        )
+# BUILD_COMMAND ${MINGW_BAT} -mingw64 -c "export PATH=${ENV_PATH} && cd qemu-nrf52/build && make -j4 -k" # also works, less practical
+add_dependencies(${PROJECT_NAME} qemu-nrf52)
