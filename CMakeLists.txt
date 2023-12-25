@@ -106,3 +106,5 @@ ExternalProject_Add(qemu-nrf52
         )
 # BUILD_COMMAND ${MINGW_BAT} -mingw64 -c "export PATH=${ENV_PATH} && cd qemu-nrf52/build && make -j4 -k" # also works, less practical
 add_dependencies(${PROJECT_NAME} qemu-nrf52)
+
+file( GENERATE OUTPUT "${CMAKE_BINARY_DIR}/.gitignore" CONTENT "*" )
