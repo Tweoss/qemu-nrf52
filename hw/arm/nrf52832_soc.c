@@ -278,6 +278,8 @@ static void nrf52832_soc_realize(DeviceState *dev_soc, Error **errp)
     /* UART */
     object_property_set_link(OBJECT(&s->uart), "downstream", OBJECT(&s->container),
                              &error_fatal);
+    object_property_set_bool(OBJECT(&s->uart), "is_uarte", true,
+                             &error_fatal);
     if (!sysbus_realize(SYS_BUS_DEVICE(&s->uart), errp)) {
         return;
     }

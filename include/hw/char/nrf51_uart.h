@@ -98,7 +98,7 @@ struct NRF51UARTState {
 
     uint32_t reg[NRF52832_UART_PER_SIZE];
 
-//    bool rx_started;
+    bool is_uarte;
     bool pending_tx_byte;
     bool enabled;
 
