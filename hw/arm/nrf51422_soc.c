@@ -132,6 +132,14 @@ static void _dwt_write(void *opaque,
 }
 
 
+static const MemoryRegionOps dwt_ops = {
+        .read = _dwt_read,
+        .write = _dwt_write,
+        .endianness = DEVICE_NATIVE_ENDIAN,
+        .valid.min_access_size = 1,
+        .valid.max_access_size = 8,
+};
+
 static uint64_t _pwr_read(void *opaque,
                           hwaddr addr,
                           unsigned size) {
@@ -155,14 +163,6 @@ static void _pwr_write(void *opaque,
 
     return;
 }
-
-static const MemoryRegionOps dwt_ops = {
-        .read = _dwt_read,
-        .write = _dwt_write,
-        .endianness = DEVICE_NATIVE_ENDIAN,
-        .valid.min_access_size = 1,
-        .valid.max_access_size = 8,
-};
 
 static const MemoryRegionOps pwr_ops = {
         .read = _pwr_read,
