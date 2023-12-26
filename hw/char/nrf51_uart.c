@@ -363,7 +363,7 @@ static void uart_receive(void *opaque, const uint8_t *buf, int size)
 
     info_report("nrf5x.uart0: uart_receive %d (started= %d)", size, s->reg[R_UART_STARTRX]);
 
-    if (size == 0) {
+    if (size == 0 || s->enabled == false) {
         return;
     }
 
@@ -375,7 +375,7 @@ static void uart_receive(void *opaque, const uint8_t *buf, int size)
     }
 
     // copy to DMA buffer
-    if (s->reg[R_UART_STARTRX]) {
+    if (s->reg[R_UART_STARTRX] && s->is_uarte) {
 
         s->reg[R_UART_RXD_AMOUNT] += size;
         s->reg[R_UART_RXDRDY] = 1;
@@ -401,23 +401,21 @@ static void uart_receive(void *opaque, const uint8_t *buf, int size)
 
         s->rx_fifo_len = 0;
         s->rx_fifo_pos = 0;
-
-        nrf51_uart_update_irq(s);
     }
 
-    // qemu_chr_fe_accept_input(&s->chr);
+    nrf51_uart_update_irq(s);
 }
 
 static int uart_can_receive(void *opaque)
 {
     NRF51UARTState *s = NRF51_UART(opaque);
 
-    if (!s->enabled) {
-        return 0;
+    if (s->is_uarte && s->reg[R_UART_STARTRX] && s->reg[R_UART_RXD_MAXCNT]) {
+        return s->reg[R_UART_RXD_MAXCNT];
     }
 
-    if (s->reg[R_UART_STARTRX] && s->reg[R_UART_RXD_MAXCNT]) {
-        return s->reg[R_UART_RXD_MAXCNT];
+    if (!s->is_uarte) {
+        return (UART_FIFO_LENGTH - s->rx_fifo_len); // FIFO length
     }
 
     return 0; // random to empty the bytes
