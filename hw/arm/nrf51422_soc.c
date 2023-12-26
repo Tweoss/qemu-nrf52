@@ -131,9 +131,42 @@ static void _dwt_write(void *opaque,
     return;
 }
 
+
+static uint64_t _pwr_read(void *opaque,
+                          hwaddr addr,
+                          unsigned size) {
+
+    return 0;
+}
+
+static void _pwr_write(void *opaque,
+                       hwaddr addr,
+                       uint64_t data,
+                       unsigned size) {
+
+    switch (addr) {
+        case 0x500: // SYSTEMOFF
+            warn_report("nrf51.pwr: Going to SYSTEMOFF");
+            exit(0);
+            break;
+        default:
+            break;
+    }
+
+    return;
+}
+
 static const MemoryRegionOps dwt_ops = {
         .read = _dwt_read,
         .write = _dwt_write,
+        .endianness = DEVICE_NATIVE_ENDIAN,
+        .valid.min_access_size = 1,
+        .valid.max_access_size = 8,
+};
+
+static const MemoryRegionOps pwr_ops = {
+        .read = _pwr_read,
+        .write = _pwr_write,
         .endianness = DEVICE_NATIVE_ENDIAN,
         .valid.min_access_size = 1,
         .valid.max_access_size = 8,
@@ -411,6 +444,9 @@ static void nrf51422_soc_realize(DeviceState *dev_soc, Error **errp)
 
     memory_region_init_io(&s->dwt, NULL, &dwt_ops, s, "nrf51422_soc.dwt", 0x100);
     memory_region_add_subregion(&s->armv7m.container,  NRF51422_DWT_BASE, &s->dwt);
+
+    memory_region_init_io(&s->pwr, NULL, &pwr_ops, s, "nrf51422_soc.pwr", 0x1000);
+    memory_region_add_subregion(&s->armv7m.container,  NRF51422_IOMEM_BASE, &s->pwr);
 
     create_unimplemented_device("nrf51422_soc.io", NRF51422_IOMEM_BASE,
                                 NRF51422_IOMEM_SIZE);
