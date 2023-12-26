@@ -20,10 +20,13 @@ REG32(RTC_TASKS_CLEAR, 0x008)
 REG32(RTC_EVENT_TICK, 0x100)
 REG32(RTC_EVENT_OVRFLW, 0x104)
 
+// clear event X
 REG32(RTC_EVENT_CMP0, 0x140)
 REG32(RTC_EVENT_CMP1, 0x144)
 REG32(RTC_EVENT_CMP2, 0x148)
 REG32(RTC_EVENT_CMP3, 0x14C)
+
+REG32(RTC_SHORTS, 0x200)
 
 REG32(RTC_INTEN, 0x300)
     FIELD(RTC_INTEN, TICK, 0, 1)
@@ -57,10 +60,8 @@ struct NRF5RtcState {
     qemu_irq irq;
 
     uint8_t id;
-    QEMUTimer timer;
-    int64_t timer_start_ns;
-    int64_t update_counter_ns;
-    uint32_t counter;
+    
+    QEMUTimer tick;
 
     bool enabled;
     bool running;
