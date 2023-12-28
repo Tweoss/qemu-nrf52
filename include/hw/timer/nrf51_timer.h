@@ -76,6 +76,8 @@ struct NRF51TimerState {
     uint32_t bitmode;
     uint32_t prescaler;
 
+    MemoryRegion *downstream;
+    AddressSpace downstream_as;
 };
 
 

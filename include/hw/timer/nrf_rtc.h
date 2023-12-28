@@ -38,6 +38,12 @@ REG32(RTC_INTENSET, 0x304)
 REG32(RTC_INTENCLR, 0x308)
 
 REG32(RTC_EVTEN, 0x340)
+    FIELD(RTC_EVTEN, TICK, 0, 1)
+    FIELD(RTC_EVTEN, OVRFLW, 1, 1)
+    FIELD(RTC_EVTEN, CC0, 16, 1)
+    FIELD(RTC_EVTEN, CC1, 17, 1)
+    FIELD(RTC_EVTEN, CC2, 18, 1)
+    FIELD(RTC_EVTEN, CC3, 19, 1)
 REG32(RTC_EVTENSET, 0x344)
 REG32(RTC_EVTENCLR, 0x348)
 
@@ -66,6 +72,9 @@ struct NRF5RtcState {
     bool running;
 
     uint32_t regs[NRF_RTC_PER_SIZE];
+
+    MemoryRegion *downstream;
+    AddressSpace downstream_as;
 };
 
 #endif //QEMU_NRF52_NRF_RTC_H

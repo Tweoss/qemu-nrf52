@@ -23,6 +23,13 @@
 #include "migration/vmstate.h"
 #include "trace.h"
 
+
+#define _TYPE_NAME TYPE_NRF51_UART
+
+#define MODULE_OBJ_NAME NRF51UARTState
+#include "hw/dma/nrf5x_ppi.h"
+
+
 static void nrf51_uart_update_irq(NRF51UARTState *s)
 {
     bool irq = false;
@@ -41,7 +48,7 @@ static void nrf51_uart_update_irq(NRF51UARTState *s)
             (s->reg[R_UART_INTEN] & R_UART_INTEN_RXTO_MASK));
 
 //    if (irq) {
-//        info_report("nrf5x.uart0: irq");
+//        info_report(_TYPE_NAME": irq");
 //    }
 
     qemu_set_irq(s->irq, irq);
@@ -109,11 +116,13 @@ static gboolean uart_transmit_edma(void *do_not_use, GIOCondition cond, void *op
     }
 
 buffer_drained:
-//    info_report("nrf5x.uart0: TX done");
+//    info_report(_TYPE_NAME": TX done");
     s->reg[R_UART_TXD_AMOUNT] = s->reg[R_UART_TXD_MAXCNT];
     s->reg[R_UART_TXD_MAXCNT] = 0;
     s->reg[R_UART_ENDTX] = 1;
+    PPI_EVENT_R(s, R_UART_ENDTX);
     s->reg[R_UART_TXDRDY] = 1;
+    PPI_EVENT_R(s, R_UART_TXDRDY);
     s->pending_tx_byte = false;
 
     qemu_set_irq(s->irq, 1); // force IRQ
@@ -131,7 +140,7 @@ static void uart_transmit_edma_prepare(NRF51UARTState *s) {
     s->reg[R_UART_TXD_AMOUNT] = 0;
     s->reg[R_UART_TXDRDY] = 0;
 
-    info_report("nrf5x.uart0: bytes sending: %u %u", s->reg[R_UART_TXD_MAXCNT], s->reg[R_UART_STARTTX]);
+    info_report(_TYPE_NAME": bytes sending: %u %u", s->reg[R_UART_TXD_MAXCNT], s->reg[R_UART_STARTTX]);
 
     if (s->reg[R_UART_STARTTX] && s->reg[R_UART_TXD_MAXCNT]) { // EDMA way
 
@@ -143,7 +152,7 @@ static void uart_transmit_edma_prepare(NRF51UARTState *s) {
                                               false);
 
         if (result) {
-            error_report("nrf5x.uart0: address_space_rw error: %d", result);
+            error_report(_TYPE_NAME": address_space_rw error: %d", result);
             return;
         }
 
@@ -163,7 +172,7 @@ static void uart_transmit_prepare(NRF51UARTState *s) {
         uart_transmit_edma_prepare(s);
     } else if (s->pending_tx_byte) {
 
-//        info_report("nrf5x.uart0: TXD byte: R_UART_STARTTX %u", s->reg[R_UART_STARTTX]); // task started ?
+//        info_report(_TYPE_NAME": TXD byte: R_UART_STARTTX %u", s->reg[R_UART_STARTTX]); // task started ?
 
         uint8_t tx_reg = s->reg[R_UART_TXD];
         int consumed = qemu_chr_fe_write(&s->chr, &tx_reg, 1);
@@ -173,11 +182,13 @@ static void uart_transmit_prepare(NRF51UARTState *s) {
         }
 
         s->reg[R_UART_ENDTX] = 1;
+        PPI_EVENT_R(s, R_UART_ENDTX);
         s->reg[R_UART_TXDRDY] = 1;
+        PPI_EVENT_R(s, R_UART_TXDRDY);
 
         s->pending_tx_byte = false;
 
-//        info_report("nrf5x.uart0: R_UART_INTEN %X", s->reg[R_UART_INTEN]);
+//        info_report(_TYPE_NAME": R_UART_INTEN %X", s->reg[R_UART_INTEN]);
 
         nrf51_uart_update_irq(s);
 
@@ -198,10 +209,10 @@ static void uart_write(void *opaque, hwaddr addr,
     NRF51UARTState *s = NRF51_UART(opaque);
 
     trace_nrf51_uart_write(addr, value, size);
-//    info_report("nrf5x.uart0: uart_reg_write %08lX %lu", (long unsigned int)addr, (long unsigned int)value);
+//    info_report(_TYPE_NAME": uart_reg_write %08lX %lu", (long unsigned int)addr, (long unsigned int)value);
 
 //    if (!s->enabled && (addr != A_UART_ENABLE)) {
-//        warn_report("nrf5x.uart0: Not enabled yet !");
+//        warn_report(_TYPE_NAME": Not enabled yet !");
 //        return;
 //    }
 
@@ -234,27 +245,27 @@ static void uart_write(void *opaque, hwaddr addr,
         break;
     case A_UART_SHORTS:
         s->reg[R_UART_SHORTS] = value;
-        warn_report("nrf5x.uart0: SHORTS not implemented");
+        warn_report(_TYPE_NAME": SHORTS not implemented");
         break;
     case A_UART_STARTTX:
         s->reg[R_UART_STARTTX] = value;
         if (value == 1) {
             s->reg[R_UART_TXSTARTED] = 1;
-//            info_report("nrf5x.uart0: STARTTX %u - INT 0x%02X", s->reg[R_UART_TXD_MAXCNT], s->reg[R_UART_INTEN]);
+//            info_report(_TYPE_NAME": STARTTX %u - INT 0x%02X", s->reg[R_UART_TXD_MAXCNT], s->reg[R_UART_INTEN]);
         }
         uart_transmit_prepare(s); // easy DMA start
         break;
     case A_UART_STARTRX:
         s->reg[R_UART_STARTRX] = value;
         if (value == 1) {
-            // info_report("nrf5x.uart0: STARTRX %u", s->reg[R_UART_RXD_MAXCNT]);
+            // info_report(_TYPE_NAME": STARTRX %u", s->reg[R_UART_RXD_MAXCNT]);
             s->reg[R_UART_ENDRX] = 0;
             s->reg[R_UART_RXD_AMOUNT] = 0;
             s->reg[R_UART_RXTO] = 0;
         }
         break;
     case A_UART_ENABLE:
-        //info_report("nrf5x.uart0: A_UART_ENABLE %lu", value);
+        //info_report(_TYPE_NAME": A_UART_ENABLE %lu", value);
         if (value) {
             s->enabled = true;
             break;
@@ -284,7 +295,7 @@ static void uart_write(void *opaque, hwaddr addr,
         break;
     default:
         s->reg[addr >> 2] = value;
-//        warn_report("nrf5x.uart0: wr ADDR not implemented %lX", (long unsigned int)addr);
+//        warn_report(_TYPE_NAME": wr ADDR not implemented %lX", (long unsigned int)addr);
         break;
     }
     nrf51_uart_update_irq(s);
@@ -295,7 +306,7 @@ static uint64_t uart_read(void *opaque, hwaddr addr, unsigned int size)
     NRF51UARTState *s = NRF51_UART(opaque);
     uint64_t r;
 
-//    info_report("nrf5x.uart0: uart_read %08lX", addr);
+//    info_report(_TYPE_NAME": uart_read %08lX", addr);
 
     switch (addr) {
         case A_UART_RXD:
@@ -361,7 +372,7 @@ static void uart_receive(void *opaque, const uint8_t *buf, int size)
     NRF51UARTState *s = NRF51_UART(opaque);
     int i;
 
-    info_report("nrf5x.uart0: uart_receive %d (started= %d)", size, s->reg[R_UART_STARTRX]);
+    info_report(_TYPE_NAME": uart_receive %d (started= %d)", size, s->reg[R_UART_STARTRX]);
 
     if (size == 0 || s->enabled == false) {
         return;
@@ -372,6 +383,7 @@ static void uart_receive(void *opaque, const uint8_t *buf, int size)
         s->rx_fifo[pos] = buf[i];
         s->rx_fifo_len++;
         s->reg[R_UART_RXDRDY] = 1;
+        PPI_EVENT_R(s, R_UART_RXDRDY);
     }
 
     // copy to DMA buffer
@@ -379,18 +391,21 @@ static void uart_receive(void *opaque, const uint8_t *buf, int size)
 
         s->reg[R_UART_RXD_AMOUNT] += size;
         s->reg[R_UART_RXDRDY] = 1;
+        PPI_EVENT_R(s, R_UART_RXDRDY);
         if (s->reg[R_UART_RXD_AMOUNT] >= s->reg[R_UART_RXD_MAXCNT]) {
             if (s->reg[R_UART_RXD_AMOUNT] > s->reg[R_UART_RXD_MAXCNT]) {
-                warn_report("nrf5x.uart0: uart_trimming %d", s->reg[R_UART_RXD_AMOUNT] - s->reg[R_UART_RXD_MAXCNT]);
+                warn_report(_TYPE_NAME": uart_trimming %d", s->reg[R_UART_RXD_AMOUNT] - s->reg[R_UART_RXD_MAXCNT]);
                 s->reg[R_UART_RXD_AMOUNT] = s->reg[R_UART_RXD_MAXCNT];
             }
 
             s->reg[R_UART_ENDRX] = 1;
+            PPI_EVENT_R(s, R_UART_ENDRX);
         }
         s->reg[R_UART_STARTRX] = 0;
 
         s->reg[R_UART_INTEN] |= R_UART_INTEN_RXTO_MASK;
         s->reg[R_UART_RXTO] = 1; // artificially stop the RX
+        PPI_EVENT_R(s, R_UART_RXTO);
 
         (void) address_space_rw(&s->downstream_as,
                                 s->reg[R_UART_RXD_PTR],
@@ -446,12 +461,14 @@ static void nrf51_uart_realize(DeviceState *dev, Error **errp)
 
     s->ptimer = ptimer_init(timer_hit, s, PTIMER_POLICY_DEFAULT);
 
-    if (!s->downstream) {
+    if (!s->downstream && s->is_uarte) {
         error_report("UARTE0 'downstream' link not set");
         return;
     }
 
-    address_space_init(&s->downstream_as, s->downstream, "nrf51_uart-downstream");
+    if (s->downstream) { // microbit compatibility
+        address_space_init(&s->downstream_as, s->downstream, _TYPE_NAME"-downstream");
+    }
 }
 
 static void nrf51_uart_init(Object *obj)
@@ -495,7 +512,7 @@ static Property nrf51_uart_properties[] = {
     DEFINE_PROP_CHR("chardev", NRF51UARTState, chr),
     DEFINE_PROP_LINK("downstream", NRF51UARTState, downstream,
                      TYPE_MEMORY_REGION, MemoryRegion *),
-    DEFINE_PROP_BOOL("is_uarte", NRF51UARTState, is_uarte, true),
+    DEFINE_PROP_BOOL("is_uarte", NRF51UARTState, is_uarte, false),
     DEFINE_PROP_END_OF_LIST(),
 };
 

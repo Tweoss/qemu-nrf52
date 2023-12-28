@@ -16,6 +16,7 @@
 #include "hw/timer/nrf_clock.h"
 #include "hw/clock.h"
 #include "qom/object.h"
+#include "hw/dma/nrf5x_ppi.h"
 #include "hw/dma/nrf52_edma.h"
 #include "hw/timer/nrf_rtc.h"
 
@@ -70,6 +71,8 @@ struct NRF52832State {
     NRF5RtcState rtc0;
     NRF5RtcState rtc1;
     NRF5RtcState rtc2;
+
+    NRF5PPIState ppi;
 
     Clock *sysclk;
     Clock *refclk;

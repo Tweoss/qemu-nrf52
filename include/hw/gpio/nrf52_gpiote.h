@@ -50,10 +50,13 @@ REG32(GPIOTE_CONFIG_0, 0x510)
 struct NRF52GPIOTEState {
     SysBusDevice parent_obj;
 
-    MemoryRegion mmio;
+    MemoryRegion iomem;
     qemu_irq irq;
 
     uint32_t regs[NRF52832_GPIOTE_PER_SIZE];
+
+    MemoryRegion *downstream;
+    AddressSpace downstream_as;
 };
 
 #endif //QEMU_NRF52_NRF52_GPIOTE_H

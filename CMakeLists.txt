@@ -72,6 +72,7 @@ add_library(${PROJECT_NAME}
         ${CMAKE_CURRENT_SOURCE_DIR}/hw/dma/nrf5x_ppi.c
         ${CMAKE_CURRENT_SOURCE_DIR}/hw/char/nrf51_uart.c
         ${CMAKE_CURRENT_SOURCE_DIR}/hw/timer/nrf_rtc.c
+        ${CMAKE_CURRENT_SOURCE_DIR}/hw/timer/nrf51_timer.c
         ${CMAKE_CURRENT_SOURCE_DIR}/hw/timer/nrf_clock.c
         ${CMAKE_CURRENT_SOURCE_DIR}/hw/gpio/nrf52_gpiote.c
         ${CMAKE_CURRENT_SOURCE_DIR}/hw/sensor/lsm6dsox.c
@@ -79,6 +80,7 @@ add_library(${PROJECT_NAME}
         ${CMAKE_CURRENT_SOURCE_DIR}/hw/sensor/tmp421.c
         ${CMAKE_CURRENT_SOURCE_DIR}/hw/sensor/bmp390.c
         ${CMAKE_CURRENT_SOURCE_DIR}/hw/adc/max11254.c
+        ${CMAKE_CURRENT_SOURCE_DIR}/softmmu/memory.c
         ${SRCS})
 
 # Build on Windows

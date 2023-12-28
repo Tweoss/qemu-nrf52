@@ -62,8 +62,6 @@ static const uint32_t timer__addr[NRF51422_NUM_TIMERS] = {
 
 #define NRF51422_NVMC_BASE       0x4001E000
 
-#define NRF51422_PPI_BASE        0x4001F000
-
 #define NRF51422_GPIO_BASE       0x50000000
 
 #define NRF51422_PRIVATE_BASE    0xF0000000
@@ -135,38 +133,6 @@ static void _dwt_write(void *opaque,
 static const MemoryRegionOps dwt_ops = {
         .read = _dwt_read,
         .write = _dwt_write,
-        .endianness = DEVICE_NATIVE_ENDIAN,
-        .valid.min_access_size = 1,
-        .valid.max_access_size = 8,
-};
-
-static uint64_t _pwr_read(void *opaque,
-                          hwaddr addr,
-                          unsigned size) {
-
-    return 0;
-}
-
-static void _pwr_write(void *opaque,
-                       hwaddr addr,
-                       uint64_t data,
-                       unsigned size) {
-
-    switch (addr) {
-        case 0x500: // SYSTEMOFF
-            warn_report("nrf51.pwr: Going to SYSTEMOFF");
-            exit(0);
-            break;
-        default:
-            break;
-    }
-
-    return;
-}
-
-static const MemoryRegionOps pwr_ops = {
-        .read = _pwr_read,
-        .write = _pwr_write,
         .endianness = DEVICE_NATIVE_ENDIAN,
         .valid.min_access_size = 1,
         .valid.max_access_size = 8,
@@ -298,15 +264,13 @@ static void nrf51422_soc_realize(DeviceState *dev_soc, Error **errp)
 
     memory_region_add_subregion_overlap(&s->container, 0, s->board_memory, -1);
 
-    memory_region_init_ram(&s->sram, OBJECT(s), "nrf51422.sram", s->sram_size,
+    memory_region_init_ram(&s->sram, OBJECT(s), "sram", s->sram_size,
                            &error_fatal);
 
     memory_region_add_subregion(&s->container, NRF51422_SRAM_BASE, &s->sram);
 
     /* UART */
     object_property_set_link(OBJECT(&s->uart), "downstream", OBJECT(&s->container),
-                             &error_fatal);
-    object_property_set_bool(OBJECT(&s->uart), "is_uarte", false,
                              &error_fatal);
     if (!sysbus_realize(SYS_BUS_DEVICE(&s->uart), errp)) {
         return;
@@ -397,6 +361,8 @@ static void nrf51422_soc_realize(DeviceState *dev_soc, Error **errp)
 
     /* TIMER */
     for (i = 0; i < NRF51422_NUM_TIMERS; i++) {
+        object_property_set_link(OBJECT(&s->timer[i]), "downstream", OBJECT(&s->container),
+                                 &error_fatal);
         if (!object_property_set_uint(OBJECT(&s->timer[i]), "id", i, errp)) {
             return;
         }
@@ -413,6 +379,8 @@ static void nrf51422_soc_realize(DeviceState *dev_soc, Error **errp)
     }
 
     /* RTC0 */
+    object_property_set_link(OBJECT(&s->rtc0), "downstream", OBJECT(&s->container),
+                             &error_fatal);
     if (!sysbus_realize(SYS_BUS_DEVICE(&s->rtc0), errp)) {
         return;
     }
@@ -422,6 +390,8 @@ static void nrf51422_soc_realize(DeviceState *dev_soc, Error **errp)
                                         BASE_TO_IRQ(NRF51422_RTC0_BASE)));
 
     /* RTC1 */
+    object_property_set_link(OBJECT(&s->rtc1), "downstream", OBJECT(&s->container),
+                             &error_fatal);
     if (!sysbus_realize(SYS_BUS_DEVICE(&s->rtc1), errp)) {
         return;
     }
@@ -431,12 +401,16 @@ static void nrf51422_soc_realize(DeviceState *dev_soc, Error **errp)
                                         BASE_TO_IRQ(NRF51422_RTC1_BASE)));
 
     /* PPI */
+    object_property_set_link(OBJECT(&s->ppi), "downstream", OBJECT(&s->container),
+                             &error_fatal);
     if (!sysbus_realize(SYS_BUS_DEVICE(&s->ppi), errp)) {
         return;
     }
-    sysbus_mmio_map(SYS_BUS_DEVICE(&s->ppi), 0, NRF51422_PPI_BASE);
+    sysbus_mmio_map(SYS_BUS_DEVICE(&s->ppi), 0, NRFxxxxx_PPI_BASE);
 
     /* CLOCK */
+    object_property_set_link(OBJECT(&s->clock), "downstream", OBJECT(&s->container),
+                             &error_fatal);
     if (!sysbus_realize(SYS_BUS_DEVICE(&s->clock), errp)) {
         return;
     }
@@ -450,9 +424,6 @@ static void nrf51422_soc_realize(DeviceState *dev_soc, Error **errp)
 
     memory_region_init_io(&s->dwt, NULL, &dwt_ops, s, "nrf51422_soc.dwt", 0x100);
     memory_region_add_subregion(&s->armv7m.container,  NRF51422_DWT_BASE, &s->dwt);
-
-    memory_region_init_io(&s->pwr, NULL, &pwr_ops, s, "nrf51422_soc.pwr", 0x1000);
-    memory_region_add_subregion(&s->armv7m.container,  NRF51422_IOMEM_BASE, &s->pwr);
 
     create_unimplemented_device("nrf51422_soc.io", NRF51422_IOMEM_BASE,
                                 NRF51422_IOMEM_SIZE);
@@ -527,7 +498,7 @@ static void nrf51422_soc_init(Object *obj)
 
     object_initialize_child(obj, "gpiote", &s->gpiote, TYPE_NRF52_GPIOTE);
 
-    object_initialize_child(obj, "clock", &s->clock, TYPE_NRF52_CLOCK);
+    object_initialize_child(obj, "clock", &s->clock, TYPE_NRF_CLOCK);
 
     for (i = 0; i < NRF51422_NUM_TIMERS; i++) {
         object_initialize_child(obj, "timer[*]", &s->timer[i],

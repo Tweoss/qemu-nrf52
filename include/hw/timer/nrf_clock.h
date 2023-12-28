@@ -9,11 +9,11 @@
 #include "qom/object.h"
 #include "hw/registerfields.h"
 
-#define TYPE_NRF52_CLOCK  "nrf52_soc.clock"
-OBJECT_DECLARE_SIMPLE_TYPE(NRF52CLOCKState, NRF52_CLOCK)
+#define TYPE_NRF_CLOCK  "nrf5_soc.clock"
+OBJECT_DECLARE_SIMPLE_TYPE(NRF52CLOCKState, NRF_CLOCK)
 
 
-#define NRF52832_CLOCK_PER_SIZE 0x600
+#define NRF_CLOCK_PER_SIZE 0x1000
 
 REG32(CLOCK_TASKS_HFCLKSTART, 0x000)
 REG32(CLOCK_TASKS_HFCLKSTOP, 0x004)
@@ -45,15 +45,20 @@ REG32(CLOCK_LFCLKSTAT, 0x418)
     FIELD(CLOCK_LFCLKSTAT, SRC, 0, 2)
     FIELD(CLOCK_LFCLKSTAT, STATE, 16, 1)
 
+REG32(PWR_SYSTEMOFF, 0x500)
+
 REG32(CLOCK_LFCLKSRC, 0x518)
 
 struct NRF52CLOCKState {
     SysBusDevice parent_obj;
 
-    MemoryRegion mmio;
+    MemoryRegion iomem;
     qemu_irq irq;
 
-    uint32_t regs[NRF52832_CLOCK_PER_SIZE];
+    uint32_t regs[NRF_CLOCK_PER_SIZE];
+
+    MemoryRegion *downstream;
+    AddressSpace downstream_as;
 };
 
 

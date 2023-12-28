@@ -23,6 +23,11 @@
 
 #define TIMER_CLK_FREQ 16000000UL
 
+#define _TYPE_NAME TYPE_NRF_PPI
+
+#define MODULE_OBJ_NAME NRF51TimerState
+#include "hw/dma/nrf5x_ppi.h"
+
 static uint32_t const bitwidths[] = {16, 8, 24, 32};
 
 static uint32_t ns_to_ticks(NRF51TimerState *s, int64_t ns)
@@ -113,6 +118,7 @@ static void timer_expire(void *opaque)
     for (i = 0; i < NRF51_TIMER_REG_COUNT; i++) {
         if (cc_remaining[i] <= ticks) {
             s->events_compare[i] = 1;
+            PPI_EVENT_A(s, NRF51_TIMER_EVENT_COMPARE_0+(i<<2u));
 
             if (s->shorts & BIT(i)) {
                 s->timer_start_ns = now;
@@ -142,6 +148,7 @@ static void counter_compare(NRF51TimerState *s)
     for (i = 0; i < NRF51_TIMER_REG_COUNT; i++) {
         if (counter == s->cc[i]) {
             s->events_compare[i] = 1;
+            PPI_EVENT_A(s, NRF51_TIMER_EVENT_COMPARE_0+(i<<2u));
 
             if (s->shorts & BIT(i)) {
                 s->counter = 0;
@@ -320,6 +327,10 @@ static void nrf51_timer_init(Object *obj)
     sysbus_init_irq(sbd, &s->irq);
 
     timer_init_ns(&s->timer, QEMU_CLOCK_VIRTUAL, timer_expire, s);
+
+    if (s->downstream) {
+        address_space_init(&s->downstream_as, s->downstream, TYPE_NRF51_TIMER"-downstream");
+    }
 }
 
 static void nrf51_timer_reset(DeviceState *dev)
@@ -376,6 +387,8 @@ static const VMStateDescription vmstate_nrf51_timer = {
 
 static Property nrf51_timer_properties[] = {
     DEFINE_PROP_UINT8("id", NRF51TimerState, id, 0),
+    DEFINE_PROP_LINK("downstream", NRF51TimerState, downstream,
+                     TYPE_MEMORY_REGION, MemoryRegion*),
     DEFINE_PROP_END_OF_LIST(),
 };
 

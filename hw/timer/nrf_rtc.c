@@ -21,7 +21,6 @@
 #include "qapi/error.h"
 #include "qemu/module.h"
 #include "qom/object.h"
-#include "hw/qdev-properties.h"
 #include "hw/irq.h"
 #include "hw/ptimer.h"
 #include "hw/sysbus.h"
@@ -32,6 +31,13 @@
 #define TIMER_CLK_FREQ 32768uL
 
 #define TIMER_BITWIDTH 24
+
+#define PRESCALER_BITWIDTH 12
+
+#define _TYPE_NAME TYPE_NRF_RTC
+
+#define MODULE_OBJ_NAME NRF5RtcState
+#include "hw/dma/nrf5x_ppi.h"
 
 
 static void update_irq(NRF5RtcState *s)
@@ -52,7 +58,7 @@ static void update_irq(NRF5RtcState *s)
             (s->regs[R_RTC_INTEN] & R_RTC_INTEN_CC3_MASK);
 
 //    if (flag) {
-//        info_report("nrf.rtc: update_irq mask=%u", s->regs[R_RTC_INTEN]);
+//        info_report(_TYPE_NAME": update_irq mask=%u", s->regs[R_RTC_INTEN]);
 //    }
 
     qemu_set_irq(s->irq, flag);
@@ -75,6 +81,9 @@ static void counter_compare(NRF5RtcState *s)
         // next compare to expire
         if (s->regs[R_RTC_CC0+i] == s->regs[R_RTC_CTR]) {
             s->regs[R_RTC_EVENT_CMP0+i] = 1;
+            if (s->regs[R_RTC_EVTEN] & (R_RTC_EVTEN_CC0_MASK << i)) {
+                PPI_EVENT_R(s, R_RTC_EVENT_CMP0+i);
+            }
         }
     }
 }
@@ -83,7 +92,7 @@ static void tick_rearm(void *opaque, int64_t now)
 {
     NRF5RtcState *s = NRF_RTC(opaque);
 
-    s->regs[R_RTC_PRESCALER] = s->regs[R_RTC_PRESCALER] & 0xFFFu; // max value
+    s->regs[R_RTC_PRESCALER] = s->regs[R_RTC_PRESCALER] & (BIT(PRESCALER_BITWIDTH)-1); // max value 12 bits
 
     uint64_t timer_per_ns = muldiv64((s->regs[R_RTC_PRESCALER] + 1), NANOSECONDS_PER_SECOND, TIMER_CLK_FREQ);
 
@@ -91,7 +100,7 @@ static void tick_rearm(void *opaque, int64_t now)
 
     if (!s->running) {
         s->running = true;
-        info_report("nrf.rtc: timer_per_ns %lu", (long unsigned)timer_per_ns);
+        info_report(_TYPE_NAME": timer_per_ns %lu", (long unsigned)timer_per_ns);
     }
 }
 
@@ -100,20 +109,28 @@ static void tick_expire(void *opaque)
     NRF5RtcState *s = NRF_RTC(opaque);
     int64_t now = qemu_clock_get_ns(QEMU_CLOCK_VIRTUAL);
 
-//    info_report("nrf.rtc: tick");
+//    info_report(_TYPE_NAME": tick");
 
     if (++s->regs[R_RTC_CTR] >= BIT(TIMER_BITWIDTH)) {
         s->regs[R_RTC_EVENT_OVRFLW] = 1;
         s->regs[R_RTC_CTR] = 0;
+        if (s->regs[R_RTC_EVTEN] & R_RTC_EVTEN_OVRFLW_MASK) {
+            PPI_EVENT_A(s, A_RTC_EVENT_OVRFLW);
+        }
     }
 
     s->regs[R_RTC_EVENT_TICK] = 1;
+    if (s->regs[R_RTC_EVTEN] & R_RTC_EVTEN_TICK_MASK) {
+        PPI_EVENT_A(s, A_RTC_EVENT_TICK);
+    }
 
     counter_compare(s);
 
     update_irq(s);
 
-    tick_rearm(s, now);
+    if (s->running) {
+        tick_rearm(s, now);
+    }
 }
 
 static uint64_t _nrf_read(void *opaque,
@@ -123,7 +140,7 @@ static uint64_t _nrf_read(void *opaque,
     uint64_t r;
     NRF5RtcState *s = NRF_RTC(opaque);
 
-//    info_report("nrf.rtc: read %08lX", (long unsigned)addr);
+//    info_report(_TYPE_NAME": read %08lX", (long unsigned)addr);
 
     switch (addr) {
         case A_RTC_EVTEN:
@@ -132,6 +149,7 @@ static uint64_t _nrf_read(void *opaque,
             r = s->regs[R_RTC_EVTEN];
             break;
 
+        case A_RTC_INTEN:
         case A_RTC_INTENCLR:
         case A_RTC_INTENSET:
             r = s->regs[R_RTC_INTEN];
@@ -142,7 +160,7 @@ static uint64_t _nrf_read(void *opaque,
             break;
     }
 
-    //info_report("nrf.rtc: _nrf_read %08lX = %lu", addr, r);
+    //info_report(_TYPE_NAME": _nrf_read %08lX = %lu", addr, r);
 
     return r;
 
@@ -156,7 +174,7 @@ static void _nrf_write(void *opaque,
     NRF5RtcState *s = NRF_RTC(opaque);
     uint64_t now = qemu_clock_get_ns(QEMU_CLOCK_VIRTUAL);
 
-//    info_report("nrf.rtc: write %08lX %lu", (long unsigned)addr, (long unsigned)value);
+//    info_report(_TYPE_NAME": write %08llX %llu", addr, value);
 
     switch (addr) { // EDMA
 
@@ -202,13 +220,6 @@ static void _nrf_write(void *opaque,
             s->regs[addr / 4] = value;
             break;
 
-        case A_RTC_CC0:
-        case A_RTC_CC1:
-        case A_RTC_CC2:
-        case A_RTC_CC3:
-            s->regs[addr / 4] = value; // compare value
-            break;
-
         case A_RTC_EVTEN:
             s->regs[R_RTC_EVTEN] = value;
             break;
@@ -219,6 +230,9 @@ static void _nrf_write(void *opaque,
             s->regs[R_RTC_EVTEN] &= ~value;
             break;
 
+        case A_RTC_INTEN:
+            s->regs[R_RTC_INTEN] = value;
+            break;
         case A_RTC_INTENSET:
             s->regs[R_RTC_INTEN] |= value;
             break;
@@ -259,6 +273,13 @@ static void nrf_rtcrealize(DeviceState *dev, Error **errp)
     sysbus_init_irq(sbd, &s->irq);
 
     timer_init_ns(&s->tick, QEMU_CLOCK_VIRTUAL, tick_expire, s);
+
+    if (!s->downstream) {
+        error_report("!! 'downstream' link not set");
+        return;
+    }
+
+    address_space_init(&s->downstream_as, s->downstream, _TYPE_NAME"-downstream");
 }
 
 static void nrf_rtcinit(Object *obj)
@@ -299,6 +320,8 @@ static const VMStateDescription nrf_rtcvmstate = {
 
 static Property nrf_rtc_properties[] = {
         DEFINE_PROP_UINT8("id", NRF5RtcState, id, 0),
+        DEFINE_PROP_LINK("downstream", NRF5RtcState, downstream,
+                         TYPE_MEMORY_REGION, MemoryRegion*),
         DEFINE_PROP_END_OF_LIST(),
 };
 

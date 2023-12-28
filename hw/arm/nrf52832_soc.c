@@ -66,7 +66,7 @@ static const uint32_t timer__addr[] = {
 
 #define NRF52832_NVMC_BASE       0x4001E000
 
-#define NRF52832_PPI_BASE        0x4001F000
+#define NRF52832_PPI_BASE        NRFxxxxx_PPI_BASE
 
 #define NRF52832_SPIM2_BASE      0x40023000
 
@@ -139,38 +139,6 @@ static void _dwt_write(void *opaque,
 static const MemoryRegionOps dwt_ops = {
         .read = _dwt_read,
         .write = _dwt_write,
-        .endianness = DEVICE_NATIVE_ENDIAN,
-        .valid.min_access_size = 1,
-        .valid.max_access_size = 8,
-};
-
-static uint64_t _pwr_read(void *opaque,
-                          hwaddr addr,
-                          unsigned size) {
-
-    return 0;
-}
-
-static void _pwr_write(void *opaque,
-                       hwaddr addr,
-                       uint64_t data,
-                       unsigned size) {
-
-    switch (addr) {
-        case 0x500: // SYSTEMOFF
-            warn_report("nrf52.pwr: Going to SYSTEMOFF");
-            exit(0);
-            break;
-        default:
-            break;
-    }
-
-    return;
-}
-
-static const MemoryRegionOps pwr_ops = {
-        .read = _pwr_read,
-        .write = _pwr_write,
         .endianness = DEVICE_NATIVE_ENDIAN,
         .valid.min_access_size = 1,
         .valid.max_access_size = 8,
@@ -302,7 +270,7 @@ static void nrf52832_soc_realize(DeviceState *dev_soc, Error **errp)
 
     memory_region_add_subregion_overlap(&s->container, 0, s->board_memory, -1);
 
-    memory_region_init_ram(&s->sram, OBJECT(s), "nrf52832.sram", s->sram_size,
+    memory_region_init_ram(&s->sram, OBJECT(s), "sram", s->sram_size,
                            &error_fatal);
 
     memory_region_add_subregion(&s->container, NRF52832_SRAM_BASE, &s->sram);
@@ -397,6 +365,8 @@ static void nrf52832_soc_realize(DeviceState *dev_soc, Error **errp)
     qdev_pass_gpios(DEVICE(&s->gpio), dev_soc, NULL);
 
     /* GPIOTE */
+    object_property_set_link(OBJECT(&s->gpiote), "downstream", OBJECT(&s->container),
+                             &error_fatal);
     if (!sysbus_realize(SYS_BUS_DEVICE(&s->gpiote), errp)) {
         return;
     }
@@ -413,6 +383,8 @@ static void nrf52832_soc_realize(DeviceState *dev_soc, Error **errp)
 
     /* TIMER */
     for (i = 0; i < NRF52832_NUM_TIMERS; i++) {
+        object_property_set_link(OBJECT(&s->timer[i]), "downstream", OBJECT(&s->container),
+                                 &error_fatal);
         if (!object_property_set_uint(OBJECT(&s->timer[i]), "id", i, errp)) {
             return;
         }
@@ -429,6 +401,8 @@ static void nrf52832_soc_realize(DeviceState *dev_soc, Error **errp)
     }
 
     /* RTC0 */
+    object_property_set_link(OBJECT(&s->rtc0), "downstream", OBJECT(&s->container),
+                             &error_fatal);
     if (!sysbus_realize(SYS_BUS_DEVICE(&s->rtc0), errp)) {
         return;
     }
@@ -438,6 +412,8 @@ static void nrf52832_soc_realize(DeviceState *dev_soc, Error **errp)
                                         BASE_TO_IRQ(NRF52832_RTC0_BASE)));
 
     /* RTC1 */
+    object_property_set_link(OBJECT(&s->rtc1), "downstream", OBJECT(&s->container),
+                             &error_fatal);
     if (!sysbus_realize(SYS_BUS_DEVICE(&s->rtc1), errp)) {
         return;
     }
@@ -447,6 +423,8 @@ static void nrf52832_soc_realize(DeviceState *dev_soc, Error **errp)
                                         BASE_TO_IRQ(NRF52832_RTC1_BASE)));
 
     /* RTC2 */
+    object_property_set_link(OBJECT(&s->rtc2), "downstream", OBJECT(&s->container),
+                             &error_fatal);
     if (!sysbus_realize(SYS_BUS_DEVICE(&s->rtc2), errp)) {
         return;
     }
@@ -455,7 +433,17 @@ static void nrf52832_soc_realize(DeviceState *dev_soc, Error **errp)
                        qdev_get_gpio_in(DEVICE(&s->armv7m),
                                         BASE_TO_IRQ(NRF52832_RTC2_BASE)));
 
+    /* PPI */
+    object_property_set_link(OBJECT(&s->ppi), "downstream", OBJECT(&s->container),
+                             &error_fatal);
+    if (!sysbus_realize(SYS_BUS_DEVICE(&s->ppi), errp)) {
+        return;
+    }
+    sysbus_mmio_map(SYS_BUS_DEVICE(&s->ppi), 0, NRF52832_PPI_BASE);
+
     /* CLOCK */
+    object_property_set_link(OBJECT(&s->clock), "downstream", OBJECT(&s->container),
+                             &error_fatal);
     if (!sysbus_realize(SYS_BUS_DEVICE(&s->clock), errp)) {
         return;
     }
@@ -469,9 +457,6 @@ static void nrf52832_soc_realize(DeviceState *dev_soc, Error **errp)
 
     memory_region_init_io(&s->dwt, NULL, &dwt_ops, s, "nrf52832_soc.dwt", 0x100);
     memory_region_add_subregion(&s->armv7m.container,  NRF52832_DWT_BASE, &s->dwt);
-
-    memory_region_init_io(&s->pwr, NULL, &pwr_ops, s, "nrf52832_soc.pwr", 0x1000);
-    memory_region_add_subregion(&s->armv7m.container,  NRF52832_IOMEM_BASE, &s->pwr);
 
     create_unimplemented_device("nrf52832_soc.io", NRF52832_IOMEM_BASE,
                                 NRF52832_IOMEM_SIZE);
@@ -491,8 +476,6 @@ static void nrf52832_soc_realize(DeviceState *dev_soc, Error **errp)
                                 NRF52832_COMP_BASE, NRF52832_PERIPHERAL_SIZE);
     create_unimplemented_device("nrf52832_soc.pwm0",
                                 NRF52832_PWM0_BASE, NRF52832_PERIPHERAL_SIZE);
-    create_unimplemented_device("nrf52832_soc.ppi",
-                                NRF52832_PPI_BASE, NRF52832_PERIPHERAL_SIZE);
     create_unimplemented_device("nrf52832_soc.nfct",
                                 NRF52832_NFCT_BASE, NRF52832_PERIPHERAL_SIZE);
 
@@ -555,7 +538,7 @@ static void nrf52832_soc_init(Object *obj)
 
     object_initialize_child(obj, "gpiote", &s->gpiote, TYPE_NRF52_GPIOTE);
 
-    object_initialize_child(obj, "clock", &s->clock, TYPE_NRF52_CLOCK);
+    object_initialize_child(obj, "clock", &s->clock, TYPE_NRF_CLOCK);
 
     for (i = 0; i < NRF52832_NUM_TIMERS; i++) {
         object_initialize_child(obj, "timer[*]", &s->timer[i],
@@ -566,6 +549,8 @@ static void nrf52832_soc_init(Object *obj)
     object_initialize_child(obj, "rtc0", &s->rtc0, TYPE_NRF_RTC);
     object_initialize_child(obj, "rtc1", &s->rtc1, TYPE_NRF_RTC);
     object_initialize_child(obj, "rtc2", &s->rtc2, TYPE_NRF_RTC);
+
+    object_initialize_child(obj, "ppi", &s->ppi, TYPE_NRF_PPI);
 
     object_property_add_alias(obj, "serial0", OBJECT(s), "rtt_chardev");
 

@@ -1,10 +1,17 @@
 #include "qemu/osdep.h"
 #include "qemu/log.h"
 #include "qemu/module.h"
+#include "hw/qdev-properties.h"
+#include "hw/qdev-properties-system.h"
 #include "hw/gpio/nrf52_gpiote.h"
 #include "hw/irq.h"
 #include "migration/vmstate.h"
 #include "trace.h"
+
+#define _TYPE_NAME TYPE_NRF52_GPIOTE
+
+#define MODULE_OBJ_NAME NRF52GPIOTEState
+#include "hw/dma/nrf5x_ppi.h"
 
 
 static uint64_t nrf52_gpiote_read(void *opaque, hwaddr addr, unsigned int size)
@@ -97,6 +104,7 @@ static void nrf52_gpiote_set(void *opaque, int line, int value)
                 // info_report("nrf52.gpiote INT mode: %u pin: %u pol %u (val %d)", mode, pin, pol, value);
                 if (irq_level) {
                     s->regs[R_GPIOTE_EVENTS_IN_0+i] = 1;
+                    PPI_EVENT_R(s, R_GPIOTE_EVENTS_IN_0+i);
                 }
                 qemu_set_irq(s->irq, irq_level);
             }
@@ -110,34 +118,40 @@ static void nrf52_gpiote_reset(DeviceState *dev)
 //    NRF52GPIOTEState *s = NRF52_GPIOTE(dev);
 }
 
-static const VMStateDescription vmstate_nrf51_gpio = {
-        .name = TYPE_NRF52_GPIOTE,
-        .version_id = 1,
-        .minimum_version_id = 1,
-        .fields = (VMStateField[]) {
-                VMSTATE_END_OF_LIST()
-        }
-};
-
 static void nrf52_gpiote_init(Object *obj)
 {
-    NRF52GPIOTEState *s = NRF52_GPIOTE(obj);
+//    NRF52GPIOTEState *s = NRF52_GPIOTE(dev);
+}
 
-    memory_region_init_io(&s->mmio, obj, &gpio_ops, s,
+static void nrf52832_gpiote_realize(DeviceState *dev, Error **errp)
+{
+    NRF52GPIOTEState *s = NRF52_GPIOTE(dev);
+
+    memory_region_init_io(&s->iomem, OBJECT(dev), &gpio_ops, s,
                           TYPE_NRF52_GPIOTE, NRF52832_GPIOTE_PER_SIZE);
-    sysbus_init_mmio(SYS_BUS_DEVICE(obj), &s->mmio);
-    sysbus_init_irq(SYS_BUS_DEVICE(obj), &s->irq);
+    sysbus_init_mmio(SYS_BUS_DEVICE(dev), &s->iomem);
+    sysbus_init_irq(SYS_BUS_DEVICE(dev), &s->irq);
 
     qdev_init_gpio_in_named(DEVICE(s), nrf52_gpiote_set, "gpiote", NRF52_GPIOTE_PINS);
+
+    if (s->downstream) {
+        address_space_init(&s->downstream_as, s->downstream, _TYPE_NAME"-downstream");
+    }
 }
+
+static Property nrf52832_gpiote_properties[] = {
+        DEFINE_PROP_LINK("downstream", NRF52GPIOTEState, downstream,
+                         TYPE_MEMORY_REGION, MemoryRegion *),
+        DEFINE_PROP_END_OF_LIST(),
+};
 
 static void nrf52_gpiote_class_init(ObjectClass *klass, void *data)
 {
     DeviceClass *dc = DEVICE_CLASS(klass);
 
-    dc->vmsd = &vmstate_nrf51_gpio;
     dc->reset = nrf52_gpiote_reset;
-    dc->desc = "nRF52 GPIOTE";
+    dc->realize = nrf52832_gpiote_realize;
+    device_class_set_props(dc, nrf52832_gpiote_properties);
 }
 
 static const TypeInfo nrf52_gpiote_info = {

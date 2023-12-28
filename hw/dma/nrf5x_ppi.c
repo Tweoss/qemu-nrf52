@@ -16,8 +16,37 @@
 #include "trace.h"
 #include "hw/dma/nrf5x_ppi.h"
 
+#define _TYPE_NAME TYPE_NRF_PPI
+
 
 static void _update_irq(NRF5PPIState *s) {
+
+}
+
+static void _process_event(NRF5PPIState *s, uint32_t value) {
+
+    for (unsigned chan_nb=0; chan_nb < PPI_CHANNEL_NB; chan_nb++) {
+        if (s->regs[R_PPI_CHEN] & (1u << chan_nb)) { // channel enabled ?
+            if (value == s->regs[R_PPI_CH0_EEP + (chan_nb << 3u)]) { // event match ?
+
+//                info_report(TYPE_NRF_PPI": event match !");
+
+                uint32_t per_add = 1;
+                MemTxResult res = address_space_rw(&s->downstream_as,
+                                                   s->regs[R_PPI_CH0_TEP + (chan_nb << 3u)],
+                                                   MEMTXATTRS_UNSPECIFIED,
+                                                   &per_add,
+                                                   sizeof(per_add),
+                                                   true);
+
+                if (res) {
+                    error_report(_TYPE_NAME": error %u", res);
+                }
+
+                return;
+            }
+        }
+    }
 
 }
 
@@ -28,12 +57,41 @@ static void _nrf_write(void *opaque,
 
     NRF5PPIState *s = NRF_PPI(opaque);
 
-    info_report(TYPE_NRF_PPI": _nrf_write %03llX <- %llX", addr, value);
+//    info_report(_TYPE_NAME": _nrf_write %03llX <- %llX", addr, value);
 
-    switch (addr) { // EDMA
+    if (addr <= A_PPI_CHG3_DIS) {
+
+        uint8_t channel = (addr - A_PPI_CHG0_EN) >> 3u;
+        info_report(_TYPE_NAME": channel group: %u", channel);
+
+    } else
+    if (addr >= A_PPI_CH0_EEP && addr <= A_PPI_CH15_TEP) {
+
+//        uint8_t channel = (addr - A_PPI_CH0_EEP) >> 3u;
+//        info_report(_TYPE_NAME": channel: %u", channel);
+
+    }
+
+    s->regs[addr >> 2] = value;
+
+    switch (addr) {
+
+        case A_PPI_CHEN:
+            s->regs[R_PPI_CHEN] = value;
+            break;
+        case A_PPI_CHENSET:
+            s->regs[R_PPI_CHEN] |= value;
+            break;
+        case A_PPI_CHENCLR:
+            s->regs[R_PPI_CHEN] &= ~value;
+            break;
+
+        case A_PPI_EVENT_IN:
+//            info_report(_TYPE_NAME": Received event !");
+            _process_event(s, value);
+            break;
 
         default:
-            s->regs[addr >> 2] = value;
             break;
     }
 
@@ -47,9 +105,15 @@ static uint64_t _nrf_read(void *opaque,
     uint64_t r;
     NRF5PPIState *s = NRF_PPI(opaque);
 
-    info_report(TYPE_NRF_PPI": _nrf_read %08llX", addr);
+//    info_report(_TYPE_NAME": _nrf_read %08llX", addr);
 
     switch (addr) {
+
+        case A_PPI_CHEN:
+        case A_PPI_CHENSET:
+        case A_PPI_CHENCLR:
+            r = s->regs[R_PPI_CHEN];
+            break;
 
         default:
             r = s->regs[addr >> 2];
@@ -80,17 +144,18 @@ static void nrf5x_ppi_realize(DeviceState *dev, Error **errp)
 {
     NRF5PPIState *s = NRF_PPI(dev);
 
-//    if (!s->downstream) {
-//        error_report("!! 'downstream' link not set");
-//        return;
-//    }
-//
-//    address_space_init(&s->downstream_as, s->downstream, "nrf5x_ppi-downstream");
-
     memory_region_init_io(&s->iomem, OBJECT(dev), &edma_ops, s,
                           TYPE_NRF_PPI, NRF_PPI_PER_SIZE);
     sysbus_init_mmio(SYS_BUS_DEVICE(dev), &s->iomem);
+
 //    sysbus_init_irq(SYS_BUS_DEVICE(dev), &s->irq);
+
+    if (!s->downstream) {
+        error_report("!! 'downstream' link not set");
+        return;
+    }
+
+    address_space_init(&s->downstream_as, s->downstream, _TYPE_NAME"-downstream");
 
 }
 
@@ -122,8 +187,8 @@ static const VMStateDescription nrf5x_ppi_vmstate = {
 };
 
 static Property nrf5x_ppi_properties[] = {
-//        DEFINE_PROP_LINK("downstream", NRF5PPIState, downstream,
-//                         TYPE_MEMORY_REGION, MemoryRegion *),
+        DEFINE_PROP_LINK("downstream", NRF5PPIState, downstream,
+                         TYPE_MEMORY_REGION, MemoryRegion *),
         DEFINE_PROP_END_OF_LIST(),
 };
 

@@ -110,9 +110,6 @@ struct EDMAState {
 
     MemoryRegion iomem;
 
-    MemoryRegion *downstream;
-    AddressSpace downstream_as;
-
     qemu_irq irq;
 
     ptimer_state *ptimer;
@@ -120,7 +117,6 @@ struct EDMAState {
     qemu_irq cs_lines[NUM_SPI_SLAVES];
 
     SSIBus *bus;
-
     I2CBus *i2c_bus;
 
     uint8_t rx_dma[64*1024];
@@ -131,9 +127,10 @@ struct EDMAState {
     bool enabled;
     eEDMAtransation transaction;
 
-    uint32_t deferred_transaction;
-
     uint32_t regs[NRF52832_EDMA_PER_SIZE];
+
+    MemoryRegion *downstream;
+    AddressSpace downstream_as;
 };
 
 #endif //QEMU_NRF52_NRF52_EDMA_H
