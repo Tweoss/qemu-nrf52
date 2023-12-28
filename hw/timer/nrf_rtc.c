@@ -179,6 +179,9 @@ static void _nrf_write(void *opaque,
                 }
             }
             break;
+        case A_RTC_TRIGOVRFLW:
+            s->regs[R_RTC_CTR] = 0xFFFFF0;
+            break;
 
         case A_RTC_CTR:
             if (!s->running) {
@@ -204,11 +207,6 @@ static void _nrf_write(void *opaque,
         case A_RTC_CC2:
         case A_RTC_CC3:
             s->regs[addr / 4] = value; // compare value
-            break;
-
-        case A_RTC_SHORTS:
-            warn_report("nrf.rtc: SHORTS not implemented");
-            s->regs[addr / 4] = value;
             break;
 
         case A_RTC_EVTEN:
