@@ -430,6 +430,12 @@ static void nrf51422_soc_realize(DeviceState *dev_soc, Error **errp)
                        qdev_get_gpio_in(DEVICE(&s->armv7m),
                                         BASE_TO_IRQ(NRF51422_RTC1_BASE)));
 
+    /* PPI */
+    if (!sysbus_realize(SYS_BUS_DEVICE(&s->ppi), errp)) {
+        return;
+    }
+    sysbus_mmio_map(SYS_BUS_DEVICE(&s->ppi), 0, NRF51422_PPI_BASE);
+
     /* CLOCK */
     if (!sysbus_realize(SYS_BUS_DEVICE(&s->clock), errp)) {
         return;
@@ -464,8 +470,6 @@ static void nrf51422_soc_realize(DeviceState *dev_soc, Error **errp)
 
     create_unimplemented_device("nrf51422_soc.comp",
                                 NRF51422_COMP_BASE, NRF51422_PERIPHERAL_SIZE);
-    create_unimplemented_device("nrf51422_soc.ppi",
-                                NRF51422_PPI_BASE, NRF51422_PERIPHERAL_SIZE);
 
     create_unimplemented_device("nrf51422_soc.ficr",
                                 NRF51422_FICR_BASE, NRF51422_FICR_SIZE);
@@ -533,6 +537,8 @@ static void nrf51422_soc_init(Object *obj)
 
     object_initialize_child(obj, "rtc0", &s->rtc0, TYPE_NRF_RTC);
     object_initialize_child(obj, "rtc1", &s->rtc1, TYPE_NRF_RTC);
+
+    object_initialize_child(obj, "ppi", &s->ppi, TYPE_NRF_PPI);
 
     object_property_add_alias(obj, "serial0", OBJECT(s), "rtt_chardev");
 
