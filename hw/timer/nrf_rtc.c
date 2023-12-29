@@ -185,16 +185,12 @@ static void _nrf_write(void *opaque,
             break;
         case A_RTC_TASKS_STOP:
             if (value) {
-                timer_del(&s->tick);
                 s->running = false;
             }
             break;
         case A_RTC_TASKS_CLEAR:
             if (value) {
                 s->regs[R_RTC_CTR] = 0;
-                if (s->running) {
-                    tick_rearm(s, now);
-                }
             }
             break;
         case A_RTC_TRIGOVRFLW:
@@ -202,22 +198,15 @@ static void _nrf_write(void *opaque,
             break;
 
         case A_RTC_CTR:
-            if (!s->running) {
-                s->regs[R_RTC_CTR] = value & (BIT(TIMER_BITWIDTH) - 1);
-                counter_compare(s);
-            }
+            s->regs[R_RTC_CTR] = value & (BIT(TIMER_BITWIDTH) - 1);
             break;
 
-        case A_RTC_EVENT_CMP0:
-        case A_RTC_EVENT_CMP1:
-        case A_RTC_EVENT_CMP2:
-        case A_RTC_EVENT_CMP3:
-            if (!value) {
-                if (s->running) {
-                    counter_compare(s);
-                }
+        case A_RTC_PRESCALER:
+            if (!s->running) {
+                s->regs[addr / 4] = value;
+            } else {
+                warn_report(_TYPE_NAME": PRESCALER cannot be set while RTC is running");
             }
-            s->regs[addr / 4] = value;
             break;
 
         case A_RTC_EVTEN:
