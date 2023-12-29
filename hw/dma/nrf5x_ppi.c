@@ -29,7 +29,7 @@ static void _process_event(NRF5PPIState *s, uint32_t value) {
         if (s->regs[R_PPI_CHEN] & (1u << chan_nb)) { // channel enabled ?
             if (value == s->regs[R_PPI_CH0_EEP + (chan_nb << 3u)]) { // event match ?
 
-//                info_report(TYPE_NRF_PPI": event match !");
+//                info_report(TYPE_NRF_PPI": event match -> 0x%08X", s->regs[R_PPI_CH0_TEP + (chan_nb << 3u)]);
 
                 uint32_t per_add = 1;
                 MemTxResult res = address_space_rw(&s->downstream_as,
@@ -57,19 +57,21 @@ static void _nrf_write(void *opaque,
 
     NRF5PPIState *s = NRF_PPI(opaque);
 
-//    info_report(_TYPE_NAME": _nrf_write %03llX <- %llX", addr, value);
+    if (addr != A_PPI_EVENT_IN) {
+//        info_report(_TYPE_NAME": _nrf_write %03llX <- %llX", addr, value);
 
-    if (addr <= A_PPI_CHG3_DIS) {
+        if (addr <= A_PPI_CHG3_DIS) {
 
-        uint8_t channel = (addr - A_PPI_CHG0_EN) >> 3u;
-        info_report(_TYPE_NAME": channel group: %u", channel);
+//            uint8_t channel = (addr - A_PPI_CHG0_EN) >> 3u;
+//            info_report(_TYPE_NAME": channel group: %u", channel);
 
-    } else
-    if (addr >= A_PPI_CH0_EEP && addr <= A_PPI_CH15_TEP) {
+        } else
+        if (addr >= A_PPI_CH0_EEP && addr <= A_PPI_CH15_TEP) {
 
-//        uint8_t channel = (addr - A_PPI_CH0_EEP) >> 3u;
-//        info_report(_TYPE_NAME": channel: %u", channel);
+//            uint8_t channel = (addr - A_PPI_CH0_EEP) >> 3u;
+//            info_report(_TYPE_NAME": channel: %u", channel);
 
+        }
     }
 
     s->regs[addr >> 2] = value;
