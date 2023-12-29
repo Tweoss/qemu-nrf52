@@ -34,9 +34,10 @@ REG32(EDMA_TASKS_SUSPEND, 0x01C)
 REG32(EDMA_TASKS_RESUME, 0x020)
 
 REG32(EDMA_EVENT_STOPPED, 0x104)
-REG32(EDMA_EVENT_ENDRX, 0x110)
-REG32(EDMA_EVENT_END, 0x118)
-REG32(EDMA_EVENT_ENDTX, 0x120)
+REG32(EDMA_EVENT_ENDRX, 0x110) // not for EDMA TWIM, only SPIM
+REG32(EDMA_EVENT_END, 0x118) // not for EDMA TWIM, only SPIM
+REG32(EDMA_EVENT_ENDTX, 0x120) // not for EDMA TWIM, only SPIM
+REG32(EDMA_EVENT_ERROR, 0x124)
 REG32(EDMA_EVENT_SUSPENDED, 0x148)
 REG32(EDMA_EVENT_TWI_RX_STARTED, 0x14C)
 REG32(EDMA_EVENT_TWI_TX_STARTED, 0x150)
@@ -112,7 +113,7 @@ struct EDMAState {
 
     qemu_irq irq;
 
-    ptimer_state *ptimer;
+    QEMUTimer tick;
 
     qemu_irq cs_lines[NUM_SPI_SLAVES];
 
@@ -125,6 +126,7 @@ struct EDMAState {
     uint32_t error;
 
     bool enabled;
+    bool async_stop;
     eEDMAtransation transaction;
 
     uint32_t regs[NRF52832_EDMA_PER_SIZE];
