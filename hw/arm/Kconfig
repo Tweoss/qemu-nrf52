@@ -530,7 +530,6 @@ config NRF51422_SOC
     select SSI
     select ARM_V7M
     select UNIMP
-    select NRF52832_EDMA
 
 config NRF51_SOC
     bool

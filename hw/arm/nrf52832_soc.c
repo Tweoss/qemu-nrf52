@@ -501,11 +501,6 @@ static void nrf52832_soc_realize(DeviceState *dev_soc, Error **errp)
         return;
     }
 
-    /*
-     * TODO: ideally we should model the SoC RCC and its ability to
-     * change the sysclk frequency and define different sysclk sources.
-     */
-
     /* The refclk always runs at frequency HCLK / 2 */
     clock_set_mul_div(s->refclk, 2, 1);
     clock_set_source(s->refclk, s->sysclk);

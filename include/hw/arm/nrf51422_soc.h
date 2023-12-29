@@ -62,9 +62,6 @@ struct NRF51422State {
 
     NRF52CLOCKState clock;
 
-    EDMAState spim0_twim0;
-    EDMAState spim1_twim1;
-
     NRF51TimerState timer[NRF51422_NUM_TIMERS];
 
     NRF5RtcState rtc0;

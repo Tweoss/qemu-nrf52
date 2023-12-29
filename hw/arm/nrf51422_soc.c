@@ -282,28 +282,12 @@ static void nrf51422_soc_realize(DeviceState *dev_soc, Error **errp)
                                         BASE_TO_IRQ(NRF51422_UART0_BASE)));
 
     /* TWIM0 / SPIM0 */
-    object_property_set_link(OBJECT(&s->spim0_twim0), "downstream", OBJECT(&s->container),
-                             &error_fatal);
-    if (!sysbus_realize(SYS_BUS_DEVICE(&s->spim0_twim0), errp)) {
-        return;
-    }
-    mr = sysbus_mmio_get_region(SYS_BUS_DEVICE(&s->spim0_twim0), 0);
-    memory_region_add_subregion_overlap(&s->container, NRF51422_BOX0_BASE, mr, 0);
-    sysbus_connect_irq(SYS_BUS_DEVICE(&s->spim0_twim0), 0,
-                       qdev_get_gpio_in(DEVICE(&s->armv7m),
-                                        BASE_TO_IRQ(NRF51422_BOX0_BASE)));
+    create_unimplemented_device("nrf51422_soc.box0",
+                                NRF51422_BOX0_BASE, NRF51422_PERIPHERAL_SIZE); // TODO
 
     /* TWIM1 / SPIM1 */
-    object_property_set_link(OBJECT(&s->spim1_twim1), "downstream", OBJECT(&s->container),
-                             &error_fatal);
-    if (!sysbus_realize(SYS_BUS_DEVICE(&s->spim1_twim1), errp)) {
-        return;
-    }
-    mr = sysbus_mmio_get_region(SYS_BUS_DEVICE(&s->spim1_twim1), 0);
-    memory_region_add_subregion_overlap(&s->container, NRF51422_BOX1_BASE, mr, 0);
-    sysbus_connect_irq(SYS_BUS_DEVICE(&s->spim1_twim1), 0,
-                       qdev_get_gpio_in(DEVICE(&s->armv7m),
-                                        BASE_TO_IRQ(NRF51422_BOX1_BASE)));
+    create_unimplemented_device("nrf51422_soc.box1",
+                                NRF51422_BOX1_BASE, NRF51422_PERIPHERAL_SIZE); // TODO
 
     /* RNG */
     if (!sysbus_realize(SYS_BUS_DEVICE(&s->rng), errp)) {
@@ -462,11 +446,6 @@ static void nrf51422_soc_realize(DeviceState *dev_soc, Error **errp)
         return;
     }
 
-    /*
-     * TODO: ideally we should model the SoC RCC and its ability to
-     * change the sysclk frequency and define different sysclk sources.
-     */
-
     /* The refclk always runs at frequency HCLK / 2 */
     clock_set_mul_div(s->refclk, 2, 1);
     clock_set_source(s->refclk, s->sysclk);
@@ -486,9 +465,6 @@ static void nrf51422_soc_init(Object *obj)
 
     object_initialize_child(obj, "uart", &s->uart, TYPE_NRF51_UART);
     object_property_add_alias(obj, "serial1", OBJECT(&s->uart), "chardev");
-
-    object_initialize_child(obj, "box0", &s->spim0_twim0, TYPE_NRF52832_EDMA);
-    object_initialize_child(obj, "box1", &s->spim1_twim1, TYPE_NRF52832_EDMA);
 
     object_initialize_child(obj, "rng", &s->rng, TYPE_NRF51_RNG);
 
