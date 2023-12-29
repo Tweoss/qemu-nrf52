@@ -186,16 +186,16 @@ static void bmp3_write(BMP3State *s, uint8_t data)
 
             case A_BMP3_REG_PWR_CTRL:
                 if (data & BMP3_MODE_NORMAL) {
-                    info_report("Switched to NORMAL mode 0x%02X", data);
+                    info_report(TYPE_BMP3": Switched to NORMAL mode 0x%02X", data);
                 } else {
-                    info_report("Switched to SLEEP mode 0x%02X", data);
+                    info_report(TYPE_BMP3": Switched to SLEEP mode 0x%02X", data);
                 }
                 break;
 
             case A_BMP3_REG_INT_CTRL:
                 if (data & BMP3_DRDY_TEMP) {
                     s->uses_int1 = true;
-                    info_report("INT enabled !");
+                    info_report(TYPE_BMP3": INT enabled !");
                     ptimer_transaction_begin(s->ptimer);
                     ptimer_stop(s->ptimer);
                     ptimer_set_freq(s->ptimer, 10);
@@ -221,7 +221,7 @@ static int bmp3_tx(I2CSlave *i2c, uint8_t data)
 {
     BMP3State *s = BMP3(i2c);
 
-    // info_report("bmp3_tx 0x%02X (pos=%u)", data, s->len);
+    // info_report(TYPE_BMP3":tx 0x%02X (pos=%u)", data, s->len);
 
     if (s->len == 0) {
         /* first byte is the register pointer for a read or write
@@ -249,7 +249,7 @@ static void bmp3_reset(BMP3State *s)
 
     s->pending_clear = false;
 
-    info_report("Device reset");
+    info_report(TYPE_BMP3": Device reset");
 
     s->regs[R_BMP3_REG_CHIP_ID] = BMP390_CHIP_ID;
 
@@ -260,7 +260,7 @@ static void bmp3_reset(BMP3State *s)
 static void bmp3_read_events_process(BMP3State *s)
 {
 
-    // info_report("Device read reg= %02X", s->pointer);
+    // info_report(TYPE_BMP3": Device read reg= %02X", s->pointer);
 
     switch (s->pointer) {
 
@@ -277,7 +277,7 @@ static uint8_t bmp3_rx(I2CSlave *i2c)
 {
     BMP3State *s = BMP3(i2c);
 
-    // info_report("bmp3_rx 0x%02X (pos=%u)", ret, s->len);
+    // info_report(TYPE_BMP3":rx 0x%02X (pos=%u)", ret, s->len);
 
     if (s->pointer + s->len < sizeof(s->regs)) {
         uint8_t ret = s->regs[s->pointer + s->len];

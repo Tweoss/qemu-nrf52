@@ -122,7 +122,7 @@ static void lis12_write(struct lis12_state *s, uint8_t data)
 
             case A_LSM_CTRL4:
                 if (data & R_LSM_CTRL4_INT1_DRDY_MASK) {
-                    info_report("INT enabled !");
+                    info_report(TYPE_LSM6DW12": INT enabled !");
                     ptimer_transaction_begin(s->ptimer);
                     ptimer_stop(s->ptimer);
                     ptimer_set_freq(s->ptimer, 25);
@@ -149,7 +149,7 @@ static int lis12_tx(I2CSlave *i2c, uint8_t data)
 {
     struct lis12_state *s = LSM6DW12(i2c);
 
-//    info_report("lis12: lis12_tx 0x%02X (pos=%u)", data, s->len);
+//    info_report(TYPE_LSM6DW12": lis12_tx 0x%02X (pos=%u)", data, s->len);
 
     if (s->len == 0) {
         /* first byte is the register pointer for a read or write
@@ -183,7 +183,7 @@ static uint8_t lis12_rx(I2CSlave *i2c)
 
     if (s->pointer + s->len < sizeof(s->regs)) {
         uint8_t ret = s->regs[s->pointer + s->len];
-//        info_report("lis12: Device read reg= 0x%02X val=0x%02X", s->pointer, ret);
+//        info_report(TYPE_LSM6DW12": Device read reg= 0x%02X val=0x%02X", s->pointer, ret);
         lis12_read_events_process(s);
         s->len++;
         return ret;
@@ -232,7 +232,7 @@ static void lis12_reset(struct lis12_state *s)
     s->regs[R_LIS2DW12_OUT_Z_L] = (uint8_t)((uint16_t)acc_z & 0xFF);
     s->regs[R_LIS2DW12_OUT_Z_H] = (uint8_t)(((uint16_t)acc_z & 0xFF00) >> 8u);
 
-    info_report("Device reset");
+    info_report(TYPE_LSM6DW12": Device reset");
 }
 
 static Property _properties[] = {
