@@ -29,10 +29,39 @@ static void _clocks_irq_compute(NRF52CLOCKState *s) {
 //        info_report(_TYPE_NAME": irq %d STOPPED %u", irq, s->regs[R_EDMA_EVENT_STOPPED]);
 
     qemu_set_irq(s->irq, irq);
+}
 
-//    s->regs[R_CLOCK_EVENTS_HFCLKSTARTED] = 0; // clear events
-//    s->regs[R_CLOCK_EVENTS_LFCLKSTARTED] = 0;
+static void timer_rearm(void *opaque, bool use_ctiv)
+{
+    NRF52CLOCKState *s = NRF_CLOCK(opaque);
+    uint64_t now = qemu_clock_get_us(QEMU_CLOCK_VIRTUAL);
 
+    uint64_t timer_per_us = 100; // 100 us
+
+    if (use_ctiv) {
+        timer_per_us = s->regs[R_CLOCK_CTIV] * 250000; // Calibration timer interval in multiple of 0.25 seconds
+    }
+
+    timer_mod(&s->cal_timer, now + timer_per_us);
+}
+
+static void cal_expire(void *opaque)
+{
+    NRF52CLOCKState *s = NRF_CLOCK(opaque);
+
+//    info_report(_TYPE_NAME": tick");
+
+    if (s->regs[R_CLOCK_CAL]) {
+        s->regs[R_CLOCK_CAL] = 0;
+        s->regs[R_CLOCK_EVENTS_DONE] = 1;
+        PPI_EVENT_R(s, R_CLOCK_EVENTS_DONE);
+    } else if (R_CLOCK_CTSTART) {
+        s->regs[R_CLOCK_CTSTART] = 0;
+        s->regs[R_CLOCK_EVENTS_CTTO] = 1;
+        PPI_EVENT_R(s, R_CLOCK_EVENTS_CTTO);
+    }
+
+    _clocks_irq_compute(s);
 }
 
 static uint64_t nrf52_clock_read(void *opaque, hwaddr addr, unsigned int size)
@@ -72,6 +101,7 @@ static void nrf52_clock_write(void *opaque, hwaddr addr,
         case A_CLOCK_TASKS_LFCLKSTART:
             s->regs[R_CLOCK_LFCLKRUN] = 1;
             s->regs[R_CLOCK_EVENTS_LFCLKSTARTED] = 1;
+            s->regs[R_CLOCK_LFCLKSRCPY] = s->regs[R_CLOCK_LFCLKSRC];
             PPI_EVENT_R(s, R_CLOCK_EVENTS_LFCLKSTARTED);
             s->regs[R_CLOCK_LFCLKSTAT] |= (1 << R_CLOCK_LFCLKSTAT_STATE_SHIFT) | (1 << R_CLOCK_LFCLKSTAT_SRC_SHIFT); //xtal
             info_report(_TYPE_NAME": A_CLOCK_TASKS_LFCLKSTART");
@@ -83,6 +113,12 @@ static void nrf52_clock_write(void *opaque, hwaddr addr,
             PPI_EVENT_R(s, R_CLOCK_EVENTS_HFCLKSTARTED);
             s->regs[R_CLOCK_HFCLKSTAT] |= (1 << R_CLOCK_HFCLKSTAT_STATE_SHIFT) | (1 << R_CLOCK_HFCLKSTAT_SRC_SHIFT); // xtal
             info_report(_TYPE_NAME": A_CLOCK_TASKS_HFCLKSTART");
+            break;
+
+        case A_CLOCK_CAL:
+        case A_CLOCK_CTSTART:
+            s->regs[addr / 4] = value;
+            timer_rearm(s, addr == A_CLOCK_CTSTART);
             break;
 
         case A_CLOCK_INTEN:
@@ -131,6 +167,8 @@ static void nrf_clock_realize(DeviceState *dev, Error **errp)
                           TYPE_NRF_CLOCK, NRF_CLOCK_PER_SIZE);
     sysbus_init_mmio(sbd, &s->iomem);
     sysbus_init_irq(sbd, &s->irq);
+
+    timer_init_us(&s->cal_timer, QEMU_CLOCK_VIRTUAL, cal_expire, s);
 
     // qdev_init_gpio_in_named(DEVICE(s), nrf52_clock_set, "clock", NRF52_CLOCK_PINS);
 

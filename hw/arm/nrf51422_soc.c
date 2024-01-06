@@ -293,7 +293,6 @@ static void nrf51422_soc_realize(DeviceState *dev_soc, Error **errp)
     if (!sysbus_realize(SYS_BUS_DEVICE(&s->rng), errp)) {
         return;
     }
-
     mr = sysbus_mmio_get_region(SYS_BUS_DEVICE(&s->rng), 0);
     memory_region_add_subregion_overlap(&s->container, NRF51422_RNG_BASE, mr, 0);
     sysbus_connect_irq(SYS_BUS_DEVICE(&s->rng), 0,
@@ -400,14 +399,14 @@ static void nrf51422_soc_realize(DeviceState *dev_soc, Error **errp)
     }
     sysbus_mmio_map(SYS_BUS_DEVICE(&s->clock), 0, NRF51422_CLOCK_BASE);
 
-    /* STUB Peripherals */
-
     // Debug output
     memory_region_init_io(&s->rtt, NULL, &rtt_ops, s, "nrf51422_soc.rtt", 0x100);
     memory_region_add_subregion(&s->armv7m.container,  NRF51422_PRIVATE_BASE, &s->rtt);
 
     memory_region_init_io(&s->dwt, NULL, &dwt_ops, s, "nrf51422_soc.dwt", 0x100);
     memory_region_add_subregion(&s->armv7m.container,  NRF51422_DWT_BASE, &s->dwt);
+
+    /* STUB Peripherals */
 
     create_unimplemented_device("nrf51422_soc.io", NRF51422_IOMEM_BASE,
                                 NRF51422_IOMEM_SIZE);

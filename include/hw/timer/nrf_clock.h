@@ -8,6 +8,7 @@
 #include "hw/sysbus.h"
 #include "qom/object.h"
 #include "hw/registerfields.h"
+#include "qemu/timer.h"
 
 #define TYPE_NRF_CLOCK  "nrf5_soc.clock"
 OBJECT_DECLARE_SIMPLE_TYPE(NRF52CLOCKState, NRF_CLOCK)
@@ -20,6 +21,10 @@ REG32(CLOCK_TASKS_HFCLKSTOP, 0x004)
 
 REG32(CLOCK_TASKS_LFCLKSTART, 0x008)
 REG32(CLOCK_TASKS_LFCLKSTOP, 0x00C)
+
+REG32(CLOCK_CAL, 0x010)
+REG32(CLOCK_CTSTART, 0x014)
+REG32(CLOCK_CTSTOP, 0x018)
 
 REG32(CLOCK_EVENTS_HFCLKSTARTED, 0x100)
 REG32(CLOCK_EVENTS_LFCLKSTARTED, 0x104)
@@ -45,9 +50,15 @@ REG32(CLOCK_LFCLKSTAT, 0x418)
     FIELD(CLOCK_LFCLKSTAT, SRC, 0, 2)
     FIELD(CLOCK_LFCLKSTAT, STATE, 16, 1)
 
+REG32(CLOCK_LFCLKSRCPY, 0x41C)
+
 REG32(PWR_SYSTEMOFF, 0x500)
 
 REG32(CLOCK_LFCLKSRC, 0x518)
+
+REG32(CLOCK_CTIV, 0x538)
+
+REG32(CLOCK_XTALFREQ, 0x550)
 
 struct NRF52CLOCKState {
     SysBusDevice parent_obj;
@@ -59,6 +70,8 @@ struct NRF52CLOCKState {
 
     MemoryRegion *downstream;
     AddressSpace downstream_as;
+
+    QEMUTimer cal_timer;
 };
 
 
