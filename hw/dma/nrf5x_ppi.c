@@ -134,6 +134,60 @@ static void nrf5x_ppi_reset(DeviceState *dev)
 
     s->enabled = false;
 
+    // PPI channels 20 to 31
+    unsigned chan_nb = 20;
+
+//    20 TIMER0->EVENTS_COMPARE[0] RADIO->TASKS_TXEN
+    s->regs[R_PPI_CH0_EEP + (chan_nb   << 3u)] = 0x40008000 | 0x140;
+    s->regs[R_PPI_CH0_TEP + (chan_nb++ << 3u)] = 0x40001000 | 0x000;
+
+//    21 TIMER0->EVENTS_COMPARE[0] RADIO->TASKS_RXEN
+    s->regs[R_PPI_CH0_EEP + (chan_nb   << 3u)] = 0x40008000 | 0x140;
+    s->regs[R_PPI_CH0_TEP + (chan_nb++ << 3u)] = 0x40001000 | 0x004;
+
+//    22 TIMER0->EVENTS_COMPARE[1] RADIO->TASKS_DISABLE
+    s->regs[R_PPI_CH0_EEP + (chan_nb   << 3u)] = 0x40008000 | 0x144;
+    s->regs[R_PPI_CH0_TEP + (chan_nb++ << 3u)] = 0x40001000 | 0x010;
+
+//    23 RADIO->EVENTS_BCMATCH AAR->TASKS_START
+//    s->regs[R_PPI_CH0_EEP + (chan_nb   << 3u)] = 0x40008000 | 0x140;
+//    s->regs[R_PPI_CH0_TEP + (chan_nb++ << 3u)] = 0x40001000 | 0x004;
+    chan_nb++;
+
+//    24 RADIO->EVENTS_READY CCM->TASKS_KSGEN
+//    s->regs[R_PPI_CH0_EEP + (chan_nb   << 3u)] = 0x40008000 | 0x140;
+//    s->regs[R_PPI_CH0_TEP + (chan_nb++ << 3u)] = 0x40001000 | 0x004;
+    chan_nb++;
+
+//    25 RADIO->EVENTS_ADDRESS CCM->TASKS_CRYPT
+//    s->regs[R_PPI_CH0_EEP + (chan_nb   << 3u)] = 0x40008000 | 0x140;
+//    s->regs[R_PPI_CH0_TEP + (chan_nb++ << 3u)] = 0x40001000 | 0x004;
+    chan_nb++;
+
+//    26 RADIO->EVENTS_ADDRESS TIMER0->TASKS_CAPTURE[1]
+    s->regs[R_PPI_CH0_EEP + (chan_nb   << 3u)] = 0x40001000 | 0x104;
+    s->regs[R_PPI_CH0_TEP + (chan_nb++ << 3u)] = 0x40008000 | 0x044;
+
+//    27 RADIO->EVENTS_END TIMER0->TASKS_CAPTURE[2]
+    s->regs[R_PPI_CH0_EEP + (chan_nb   << 3u)] = 0x40001000 | 0x10C;
+    s->regs[R_PPI_CH0_TEP + (chan_nb++ << 3u)] = 0x40008000 | 0x048;
+
+//    28 RTC0->EVENTS_COMPARE[0] RADIO->TASKS_TXEN
+    s->regs[R_PPI_CH0_EEP + (chan_nb   << 3u)] = 0x4000B000 | 0x140;
+    s->regs[R_PPI_CH0_TEP + (chan_nb++ << 3u)] = 0x40001000 | 0x000;
+
+//    29 RTC0->EVENTS_COMPARE[0] RADIO->TASKS_RXEN
+    s->regs[R_PPI_CH0_EEP + (chan_nb   << 3u)] = 0x4000B000 | 0x140;
+    s->regs[R_PPI_CH0_TEP + (chan_nb++ << 3u)] = 0x40001000 | 0x004;
+
+//    30 RTC0->EVENTS_COMPARE[0] TIMER0->TASKS_CLEAR
+    s->regs[R_PPI_CH0_EEP + (chan_nb   << 3u)] = 0x4000B000 | 0x140;
+    s->regs[R_PPI_CH0_TEP + (chan_nb++ << 3u)] = 0x40008000 | 0x00C;
+
+//    31 RTC0->EVENTS_COMPARE[0] TIMER0->TASKS_START
+    s->regs[R_PPI_CH0_EEP + (chan_nb   << 3u)] = 0x4000B000 | 0x140;
+    s->regs[R_PPI_CH0_TEP + (chan_nb++ << 3u)] = 0x40008000 | 0x000;
+
 }
 
 static const MemoryRegionOps edma_ops = {

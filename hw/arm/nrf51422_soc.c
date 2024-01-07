@@ -20,6 +20,7 @@
 #define NRF51422_FICR_BASE       0x10000000
 #define NRF51422_FICR_SIZE       0x00000100
 #define NRF51422_UICR_BASE       0x10001000
+#define NRF51422_UICR_SIZE       0x00000100
 #define NRF51422_SRAM_BASE       0x20000000
 
 #define NRF51422_IOMEM_BASE      0x40000000
@@ -189,6 +190,8 @@ static void _rtt_write(void *opaque,
         // info_report("Sending %u RTT bytes", s->rtt_buffer_up_len);
         qemu_chr_fe_write(&s->rtt_chr, s->rtt_buffer_up, s->rtt_buffer_up_len);
         s->rtt_buffer_up_len = 0;
+    } else {
+        info_report("PRIVATE access: offset 0x%x", (uint32_t)addr);
     }
 
     return;
@@ -399,23 +402,29 @@ static void nrf51422_soc_realize(DeviceState *dev_soc, Error **errp)
     }
     sysbus_mmio_map(SYS_BUS_DEVICE(&s->clock), 0, NRF51422_CLOCK_BASE);
 
+    /* Radio */
+    object_property_set_link(OBJECT(&s->radio), "downstream", OBJECT(&s->container),
+                             &error_fatal);
+    if (!sysbus_realize(SYS_BUS_DEVICE(&s->radio), errp)) {
+        return;
+    }
+    sysbus_mmio_map(SYS_BUS_DEVICE(&s->radio), 0, NRF51422_RADIO_BASE);
+
     // Debug output
     memory_region_init_io(&s->rtt, NULL, &rtt_ops, s, "nrf51422_soc.rtt", 0x100);
     memory_region_add_subregion(&s->armv7m.container,  NRF51422_PRIVATE_BASE, &s->rtt);
 
+    /* Other Peripherals */
     memory_region_init_io(&s->dwt, NULL, &dwt_ops, s, "nrf51422_soc.dwt", 0x100);
     memory_region_add_subregion(&s->armv7m.container,  NRF51422_DWT_BASE, &s->dwt);
 
-    /* STUB Peripherals */
 
-    create_unimplemented_device("nrf51422_soc.io", NRF51422_IOMEM_BASE,
-                                NRF51422_IOMEM_SIZE);
+    create_unimplemented_device("nrf51422_soc.io",
+                                NRF51422_IOMEM_BASE, NRF51422_IOMEM_SIZE);
     create_unimplemented_device("nrf51422_soc.private",
                                 NRF51422_PRIVATE_BASE, NRF51422_PRIVATE_SIZE);
 
-    // peripherals
-    create_unimplemented_device("nrf51422_soc.radio",
-                                NRF51422_RADIO_BASE, NRF51422_PERIPHERAL_SIZE);
+    /* STUB Peripherals */
 
     create_unimplemented_device("nrf51422_soc.saadc",
                                 NRF51422_SAADC_BASE, NRF51422_PERIPHERAL_SIZE);
@@ -428,7 +437,7 @@ static void nrf51422_soc_realize(DeviceState *dev_soc, Error **errp)
     create_unimplemented_device("nrf51422_soc.ficr",
                                 NRF51422_FICR_BASE, NRF51422_FICR_SIZE);
     create_unimplemented_device("nrf51422_soc.uicr",
-                                NRF51422_UICR_BASE, 0x300);
+                                NRF51422_UICR_BASE, NRF51422_UICR_SIZE);
 
     /*
      * We use s->refclk internally and only define it with qdev_init_clock_in()
@@ -485,6 +494,8 @@ static void nrf51422_soc_init(Object *obj)
     object_initialize_child(obj, "rtc1", &s->rtc1, TYPE_NRF_RTC);
 
     object_initialize_child(obj, "ppi", &s->ppi, TYPE_NRF_PPI);
+
+    object_initialize_child(obj, "radio", &s->radio, TYPE_NRF_RADIO);
 
     object_property_add_alias(obj, "serial0", OBJECT(s), "rtt_chardev");
 

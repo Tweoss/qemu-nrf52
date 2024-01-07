@@ -70,6 +70,7 @@ add_definitions(-DCONFIG_DEVICES=\"arm-softmmu-config-devices.h\")
 add_library(${PROJECT_NAME}
         ${CMAKE_CURRENT_SOURCE_DIR}/hw/dma/nrf52_edma.c
         ${CMAKE_CURRENT_SOURCE_DIR}/hw/dma/nrf5x_ppi.c
+        ${CMAKE_CURRENT_SOURCE_DIR}/hw/dma/nrf5x_radio.c
         ${CMAKE_CURRENT_SOURCE_DIR}/hw/char/nrf51_uart.c
         ${CMAKE_CURRENT_SOURCE_DIR}/hw/timer/nrf_rtc.c
         ${CMAKE_CURRENT_SOURCE_DIR}/hw/timer/nrf51_timer.c

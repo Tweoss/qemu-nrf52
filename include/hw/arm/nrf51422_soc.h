@@ -17,6 +17,7 @@
 #include "qom/object.h"
 #include "hw/dma/nrf52_edma.h"
 #include "hw/dma/nrf5x_ppi.h"
+#include "hw/dma/nrf5x_radio.h"
 #include "hw/gpio/nrf52_gpiote.h"
 #include "hw/timer/nrf_rtc.h"
 
@@ -68,6 +69,8 @@ struct NRF51422State {
     NRF5RtcState rtc1;
 
     NRF5PPIState ppi;
+
+    NRF5RADIOState radio;
 
     Clock *sysclk;
     Clock *refclk;
