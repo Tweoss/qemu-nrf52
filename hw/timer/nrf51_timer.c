@@ -14,7 +14,6 @@
 #include "qemu/osdep.h"
 #include "qemu/log.h"
 #include "qemu/module.h"
-#include "hw/arm/nrf51.h"
 #include "hw/irq.h"
 #include "hw/timer/nrf51_timer.h"
 #include "hw/qdev-properties.h"
@@ -162,6 +161,8 @@ static uint64_t nrf51_timer_read(void *opaque, hwaddr offset, unsigned int size)
     NRF51TimerState *s = NRF51_TIMER(opaque);
     uint64_t r = 0;
 
+//    info_report(_TYPE_NAME": _nrf_read %08llX", offset);
+
     switch (offset) {
     case NRF51_TIMER_EVENT_COMPARE_0 ... NRF51_TIMER_EVENT_COMPARE_3:
         r = s->events_compare[(offset - NRF51_TIMER_EVENT_COMPARE_0) / 4];
@@ -205,11 +206,13 @@ static void nrf51_timer_write(void *opaque, hwaddr offset,
     uint64_t now = qemu_clock_get_ns(QEMU_CLOCK_VIRTUAL);
     size_t idx;
 
+//    info_report(_TYPE_NAME": _nrf_write %08llX", offset);
+
     trace_nrf51_timer_write(s->id, offset, value, size);
 
     switch (offset) {
     case NRF51_TIMER_TASK_START:
-        if (value == NRF51_TRIGGER_TASK && s->mode == NRF51_TIMER_TIMER) {
+        if (value && s->mode == NRF51_TIMER_TIMER) {
             s->running = true;
             s->timer_start_ns = now - ticks_to_ns(s, s->counter);
             s->update_counter_ns = s->timer_start_ns;
@@ -218,19 +221,19 @@ static void nrf51_timer_write(void *opaque, hwaddr offset,
         break;
     case NRF51_TIMER_TASK_STOP:
     case NRF51_TIMER_TASK_SHUTDOWN:
-        if (value == NRF51_TRIGGER_TASK) {
+        if (value) {
             s->running = false;
             timer_del(&s->timer);
         }
         break;
     case NRF51_TIMER_TASK_COUNT:
-        if (value == NRF51_TRIGGER_TASK && s->mode == NRF51_TIMER_COUNTER) {
+        if (value && s->mode == NRF51_TIMER_COUNTER) {
             s->counter = (s->counter + 1) % BIT(bitwidths[s->bitmode]);
             counter_compare(s);
         }
         break;
     case NRF51_TIMER_TASK_CLEAR:
-        if (value == NRF51_TRIGGER_TASK) {
+        if (value) {
             s->timer_start_ns = now;
             s->update_counter_ns = s->timer_start_ns;
             s->counter = 0;
@@ -240,7 +243,7 @@ static void nrf51_timer_write(void *opaque, hwaddr offset,
         }
         break;
     case NRF51_TIMER_TASK_CAPTURE_0 ... NRF51_TIMER_TASK_CAPTURE_3:
-        if (value == NRF51_TRIGGER_TASK) {
+        if (value) {
             if (s->running) {
                 timer_expire(s); /* update counter and all state */
             }
@@ -251,7 +254,7 @@ static void nrf51_timer_write(void *opaque, hwaddr offset,
         }
         break;
     case NRF51_TIMER_EVENT_COMPARE_0 ... NRF51_TIMER_EVENT_COMPARE_3:
-        if (value == NRF51_EVENT_CLEAR) {
+        if (value) {
             s->events_compare[(offset - NRF51_TIMER_EVENT_COMPARE_0) / 4] = 0;
 
             if (s->running) {
@@ -322,7 +325,7 @@ static void nrf51_timer_init(Object *obj)
     SysBusDevice *sbd = SYS_BUS_DEVICE(obj);
 
     memory_region_init_io(&s->iomem, obj, &rng_ops, s,
-                          TYPE_NRF51_TIMER, NRF51_PERIPHERAL_SIZE);
+                          TYPE_NRF51_TIMER, NRF51_TIMER_SIZE);
     sysbus_init_mmio(sbd, &s->iomem);
     sysbus_init_irq(sbd, &s->irq);
 

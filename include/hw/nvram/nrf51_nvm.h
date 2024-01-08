@@ -27,9 +27,9 @@
 #define TYPE_NRF51_NVM "nrf51_soc.nvm"
 OBJECT_DECLARE_SIMPLE_TYPE(NRF51NVMState, NRF51_NVM)
 
-#define NRF51_UICR_FIXTURE_SIZE 64
-
 #define NRF51_NVMC_SIZE         0x1000
+
+#define NRF51_PAGE_SIZE         1024uL
 
 #define NRF51_NVMC_READY        0x400
 #define NRF51_NVMC_READY_READY  0x01
@@ -44,6 +44,11 @@ OBJECT_DECLARE_SIMPLE_TYPE(NRF51NVMState, NRF51_NVM)
 #define NRF51_NVMC_ERASE        0x01
 
 #define NRF51_UICR_SIZE         0x100
+#define NRF51_FICR_SIZE         0x100
+
+#define NRF51_UICR_FIXTURE_SIZE (NRF51_UICR_SIZE>>2)
+
+#define NRF51_FICR_FIXTURE_SIZE (NRF51_FICR_SIZE>>2)
 
 struct NRF51NVMState {
     SysBusDevice parent_obj;
@@ -53,7 +58,9 @@ struct NRF51NVMState {
     MemoryRegion uicr;
     MemoryRegion flash;
 
-    uint32_t uicr_content[NRF51_UICR_FIXTURE_SIZE];
+    uint32_t *ficr_content;
+    uint32_t *uicr_content;
+
     uint32_t flash_size;
     uint8_t *storage;
 

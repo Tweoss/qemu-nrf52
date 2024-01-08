@@ -36,7 +36,6 @@ struct NRF51422State {
     ARMv7MState armv7m;
 
     MemoryRegion sram;
-    MemoryRegion flash;
 
     uint32_t sram_size;
     uint32_t flash_size;

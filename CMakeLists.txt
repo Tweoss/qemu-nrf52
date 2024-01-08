@@ -81,6 +81,7 @@ add_library(${PROJECT_NAME}
         ${CMAKE_CURRENT_SOURCE_DIR}/hw/sensor/tmp421.c
         ${CMAKE_CURRENT_SOURCE_DIR}/hw/sensor/bmp390.c
         ${CMAKE_CURRENT_SOURCE_DIR}/hw/adc/max11254.c
+        ${CMAKE_CURRENT_SOURCE_DIR}/hw/nvram/nrf51_nvm.c
         ${CMAKE_CURRENT_SOURCE_DIR}/softmmu/memory.c
         ${SRCS})
 
@@ -105,6 +106,7 @@ ExternalProject_Add(qemu-nrf52
 #        BUILD_COMMAND cmd.exe /c set MSYSTEM=MINGW64 && ${MINGW_PREFIX}/usr/bin/bash --login -c "export PATH=${MINGW_PATH} && cd <SOURCE_DIR> &&pwd" # test command
         BUILD_COMMAND cmd.exe /c set MSYSTEM=MINGW64 && ${MINGW_PREFIX}/usr/bin/bash --login -c "export PATH=${MINGW_PATH} && cd <SOURCE_DIR> && make -j4 -k"
         BUILD_IN_SOURCE TRUE
+        USES_TERMINAL_BUILD TRUE
         UPDATE_COMMAND    ""
         INSTALL_COMMAND   ""
         )

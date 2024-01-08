@@ -18,9 +18,7 @@
 
 #define NRF51422_FLASH_BASE      0x00000000
 #define NRF51422_FICR_BASE       0x10000000
-#define NRF51422_FICR_SIZE       0x00000100
 #define NRF51422_UICR_BASE       0x10001000
-#define NRF51422_UICR_SIZE       0x00000100
 #define NRF51422_SRAM_BASE       0x20000000
 
 #define NRF51422_IOMEM_BASE      0x40000000
@@ -83,7 +81,7 @@ static const uint32_t timer__addr[NRF51422_NUM_TIMERS] = {
  * the specific variants
  */
 
-#define NRF51422_PAGE_SIZE       1024
+#define NRF51422_PAGE_SIZE       NRF51_PAGE_SIZE
 
 #define NRF51422_FLASH_PAGES    256u
 #define NRF51422_SRAM_PAGES     32u
@@ -433,10 +431,6 @@ static void nrf51422_soc_realize(DeviceState *dev_soc, Error **errp)
     create_unimplemented_device("nrf51422_soc.comp",
                                 NRF51422_COMP_BASE, NRF51422_PERIPHERAL_SIZE);
 
-    create_unimplemented_device("nrf51422_soc.ficr",
-                                NRF51422_FICR_BASE, NRF51422_FICR_SIZE);
-    create_unimplemented_device("nrf51422_soc.uicr",
-                                NRF51422_UICR_BASE, NRF51422_UICR_SIZE);
 
 }
 

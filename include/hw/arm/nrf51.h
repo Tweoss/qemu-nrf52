@@ -17,7 +17,6 @@
 
 #define NRF51_FLASH_BASE      0x00000000
 #define NRF51_FICR_BASE       0x10000000
-#define NRF51_FICR_SIZE       0x00000100
 #define NRF51_UICR_BASE       0x10001000
 #define NRF51_SRAM_BASE       0x20000000
 
@@ -34,8 +33,6 @@
 
 #define NRF51_PRIVATE_BASE    0xF0000000
 #define NRF51_PRIVATE_SIZE    0x10000000
-
-#define NRF51_PAGE_SIZE       1024
 
 /* Trigger */
 #define NRF51_TRIGGER_TASK 0x01
