@@ -17,6 +17,7 @@
 #include "hw/clock.h"
 #include "qom/object.h"
 #include "hw/dma/nrf5x_ppi.h"
+#include "hw/dma/nrf5x_radio.h"
 #include "hw/dma/nrf52_edma.h"
 #include "hw/timer/nrf_rtc.h"
 
@@ -61,6 +62,8 @@ struct NRF52832State {
     NRF52GPIOTEState  gpiote;
 
     NRF52CLOCKState clock;
+
+    NRF5RADIOState radio;
 
     EDMAState spim0_twim0;
     EDMAState spim1_twim1;

@@ -449,7 +449,13 @@ static void nrf52832_soc_realize(DeviceState *dev_soc, Error **errp)
     }
     sysbus_mmio_map(SYS_BUS_DEVICE(&s->clock), 0, NRF52832_CLOCK_BASE);
 
-    /* STUB Peripherals */
+    /* Radio */
+    object_property_set_link(OBJECT(&s->radio), "downstream", OBJECT(&s->container),
+                             &error_fatal);
+    if (!sysbus_realize(SYS_BUS_DEVICE(&s->radio), errp)) {
+        return;
+    }
+    sysbus_mmio_map(SYS_BUS_DEVICE(&s->radio), 0, NRF52832_RADIO_BASE);
 
     // Debug output
     memory_region_init_io(&s->rtt, NULL, &rtt_ops, s, "nrf52832_soc.rtt", 0x100);
@@ -458,14 +464,14 @@ static void nrf52832_soc_realize(DeviceState *dev_soc, Error **errp)
     memory_region_init_io(&s->dwt, NULL, &dwt_ops, s, "nrf52832_soc.dwt", 0x100);
     memory_region_add_subregion(&s->armv7m.container,  NRF52832_DWT_BASE, &s->dwt);
 
+    /* Other Peripherals */
+
     create_unimplemented_device("nrf52832_soc.io", NRF52832_IOMEM_BASE,
                                 NRF52832_IOMEM_SIZE);
     create_unimplemented_device("nrf52832_soc.private",
                                 NRF52832_PRIVATE_BASE, NRF52832_PRIVATE_SIZE);
 
-    // peripherals
-    create_unimplemented_device("nrf52832_soc.radio",
-                                NRF52832_RADIO_BASE, NRF52832_PERIPHERAL_SIZE);
+    /* STUB Peripherals */
 
     create_unimplemented_device("nrf52832_soc.saadc",
                                 NRF52832_SAADC_BASE, NRF52832_PERIPHERAL_SIZE);
@@ -546,6 +552,8 @@ static void nrf52832_soc_init(Object *obj)
     object_initialize_child(obj, "rtc2", &s->rtc2, TYPE_NRF_RTC);
 
     object_initialize_child(obj, "ppi", &s->ppi, TYPE_NRF_PPI);
+
+    object_initialize_child(obj, "radio", &s->radio, TYPE_NRF_RADIO);
 
     object_property_add_alias(obj, "serial0", OBJECT(s), "rtt_chardev");
 
