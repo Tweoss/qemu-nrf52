@@ -11,7 +11,7 @@
 #include "hw/misc/nrf51_rng.h"
 #include "hw/gpio/nrf51_gpio.h"
 #include "hw/gpio/nrf52_gpiote.h"
-#include "hw/nvram/nrf51_nvm.h"
+#include "hw/nvram/nrf52_nvm.h"
 #include "hw/timer/nrf51_timer.h"
 #include "hw/timer/nrf_clock.h"
 #include "hw/clock.h"
@@ -36,7 +36,6 @@ struct NRF52832State {
     ARMv7MState armv7m;
 
     MemoryRegion sram;
-    MemoryRegion flash;
 
     uint32_t sram_size;
     uint32_t flash_size;
@@ -45,7 +44,6 @@ struct NRF52832State {
 
     MemoryRegion container;
 
-    MemoryRegion pwr;
     MemoryRegion dwt;
     MemoryRegion rtt;
     CharBackend rtt_chr;
@@ -56,7 +54,7 @@ struct NRF52832State {
 
     NRF51UARTState  uart;
     NRF51RNGState   rng;
-    NRF51NVMState   nvm;
+    NRF52NVMState   nvm;
     NRF51GPIOState  gpio;
 
     NRF52GPIOTEState  gpiote;

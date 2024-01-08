@@ -18,7 +18,6 @@
 
 #define NRF52832_FLASH_BASE      0x00000000
 #define NRF52832_FICR_BASE       0x10000000
-#define NRF52832_FICR_SIZE       0x00000500
 #define NRF52832_UICR_BASE       0x10001000
 #define NRF52832_SRAM_BASE       0x20000000
 
@@ -98,9 +97,6 @@ static const uint32_t timer__addr[] = {
 
 #define BASE_TO_IRQ(base)       ((base >> 12) & 0x3F)
 
-/* HCLK (the main CPU clock) on this SoC is always 64MHz */
-#define HCLK_FRQ 64000000
-
 static uint64_t _dwt_read(void *opaque,
                  hwaddr addr,
                  unsigned size) {
@@ -118,7 +114,7 @@ static uint64_t _dwt_read(void *opaque,
                 ccycnt = qemu_clock_get_ns(QEMU_CLOCK_VIRTUAL);
             }
             int64_t now = qemu_clock_get_ns(QEMU_CLOCK_VIRTUAL);
-            uint32_t ticks = muldiv64(now - ccycnt, HCLK_FRQ, NANOSECONDS_PER_SECOND);
+            uint32_t ticks = muldiv64(now - ccycnt, 64000000, NANOSECONDS_PER_SECOND);
             return ticks;
         }   break;
         default:
@@ -257,8 +253,10 @@ static void nrf52832_soc_realize(DeviceState *dev_soc, Error **errp)
         error_setg(errp, "sysclk clock must be wired up by the board code");
         return;
     }
-    /* This clock doesn't need migration because it is fixed-frequency */
-    clock_set_hz(s->sysclk, HCLK_FRQ);
+
+    clock_set_mul_div(s->refclk, 1, 1);
+    clock_set_source(s->refclk, s->sysclk);
+
     qdev_connect_clock_in(DEVICE(&s->armv7m), "cpuclk", s->sysclk);
     qdev_connect_clock_in(DEVICE(&s->armv7m), "refclk", s->refclk);
 
@@ -487,29 +485,6 @@ static void nrf52832_soc_realize(DeviceState *dev_soc, Error **errp)
 
     create_unimplemented_device("nrf52832_soc.fpu",
                                 NRF52832_FPU_BASE, NRF52832_PERIPHERAL_SIZE);
-    create_unimplemented_device("nrf52832_soc.ficr",
-                                NRF52832_FICR_BASE, NRF52832_FICR_SIZE);
-    create_unimplemented_device("nrf52832_soc.uicr",
-                                NRF52832_UICR_BASE, 0x300);
-
-    /*
-     * We use s->refclk internally and only define it with qdev_init_clock_in()
-     * so it is correctly parented and not leaked on an init/deinit; it is not
-     * intended as an externally exposed clock.
-     */
-    if (clock_has_source(s->refclk)) {
-        error_setg(errp, "refclk clock must not be wired up by the board code");
-        return;
-    }
-
-    if (!clock_has_source(s->sysclk)) {
-        error_setg(errp, "sysclk clock must be wired up by the board code");
-        return;
-    }
-
-    /* The refclk always runs at frequency HCLK / 2 */
-    clock_set_mul_div(s->refclk, 2, 1);
-    clock_set_source(s->refclk, s->sysclk);
 }
 
 static void nrf52832_soc_init(Object *obj)
@@ -533,7 +508,7 @@ static void nrf52832_soc_init(Object *obj)
 
     object_initialize_child(obj, "rng", &s->rng, TYPE_NRF51_RNG);
 
-    object_initialize_child(obj, "nvm", &s->nvm, TYPE_NRF51_NVM);
+    object_initialize_child(obj, "nvm", &s->nvm, TYPE_NRF52_NVM);
 
     object_initialize_child(obj, "gpio", &s->gpio, TYPE_NRF51_GPIO);
 

@@ -24,8 +24,6 @@
 #define NRF51422_IOMEM_BASE      0x40000000
 #define NRF51422_IOMEM_SIZE      0x20000000
 
-#define NRF51422_DWT_BASE        0xE0001000
-
 #define NRF51422_CLOCK_BASE      0x40000000
 
 #define NRF51422_RADIO_BASE      0x40001000
@@ -89,50 +87,6 @@ static const uint32_t timer__addr[NRF51422_NUM_TIMERS] = {
 #define NRF51422_SRAM_SIZE      (NRF51422_SRAM_PAGES * NRF51422_PAGE_SIZE)
 
 #define BASE_TO_IRQ(base)       ((base >> 12) & 0x3F)
-
-static uint64_t _dwt_read(void *opaque,
-                 hwaddr addr,
-                 unsigned size) {
-
-    static int64_t ccycnt = 0;
-
-    // info_report("DWT access: offset 0x%x", (uint32_t)addr);
-
-    switch (addr) {
-        case 0x000:
-            break;
-        case 0x004: // Cortex-M cycle counter
-        {
-            if (ccycnt == 0) {
-                ccycnt = qemu_clock_get_ns(QEMU_CLOCK_VIRTUAL);
-            }
-            int64_t now = qemu_clock_get_ns(QEMU_CLOCK_VIRTUAL);
-            uint32_t ticks = muldiv64(now - ccycnt, HCLK_FRQ, NANOSECONDS_PER_SECOND);
-            return ticks;
-        }   break;
-        default:
-            break;
-    }
-
-    return 0;
-}
-
-static void _dwt_write(void *opaque,
-              hwaddr addr,
-              uint64_t data,
-              unsigned size) {
-
-    return;
-}
-
-
-static const MemoryRegionOps dwt_ops = {
-        .read = _dwt_read,
-        .write = _dwt_write,
-        .endianness = DEVICE_NATIVE_ENDIAN,
-        .valid.min_access_size = 1,
-        .valid.max_access_size = 8,
-};
 
 static uint64_t _rtt_read(void *opaque,
                           hwaddr addr,
@@ -412,9 +366,6 @@ static void nrf51422_soc_realize(DeviceState *dev_soc, Error **errp)
     memory_region_add_subregion(&s->armv7m.container,  NRF51422_PRIVATE_BASE, &s->rtt);
 
     /* Other Peripherals */
-    memory_region_init_io(&s->dwt, NULL, &dwt_ops, s, "nrf51422_soc.dwt", 0x100);
-    memory_region_add_subregion(&s->armv7m.container,  NRF51422_DWT_BASE, &s->dwt);
-
 
     create_unimplemented_device("nrf51422_soc.io",
                                 NRF51422_IOMEM_BASE, NRF51422_IOMEM_SIZE);

@@ -44,8 +44,6 @@ struct NRF51422State {
 
     MemoryRegion container;
 
-    MemoryRegion pwr;
-    MemoryRegion dwt;
     MemoryRegion rtt;
     CharBackend rtt_chr;
     uint32_t rtt_buffer_down_len;

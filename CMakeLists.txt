@@ -82,6 +82,7 @@ add_library(${PROJECT_NAME}
         ${CMAKE_CURRENT_SOURCE_DIR}/hw/sensor/bmp390.c
         ${CMAKE_CURRENT_SOURCE_DIR}/hw/adc/max11254.c
         ${CMAKE_CURRENT_SOURCE_DIR}/hw/nvram/nrf51_nvm.c
+        ${CMAKE_CURRENT_SOURCE_DIR}/hw/nvram/nrf52_nvm.c
         ${CMAKE_CURRENT_SOURCE_DIR}/softmmu/memory.c
         ${SRCS})
 

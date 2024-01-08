@@ -21,20 +21,20 @@
 #include "qapi/error.h"
 #include "qemu/log.h"
 #include "qemu/module.h"
-#include "hw/nvram/nrf51_nvm.h"
+#include "hw/nvram/nrf52_nvm.h"
 #include "hw/qdev-properties.h"
 #include "migration/vmstate.h"
 #include "trace.h"
 
-#define _TYPE_NAME TYPE_NRF51_NVM
+#define _TYPE_NAME TYPE_NRF52_NVM
 
 static uint64_t ficr_read(void *opaque, hwaddr offset, unsigned int size)
 {
-    NRF51NVMState *s = NRF51_NVM(opaque);
+    NRF52NVMState *s = NRF52_NVM(opaque);
 
-    info_report(_TYPE_NAME": ficr_read %08llX ", offset);
+//    info_report(_TYPE_NAME": ficr_read %08llX ", offset);
 
-    assert(offset < NRF51_FICR_SIZE);
+    assert(offset < s->ficr_size);
     return s->ficr_content[offset / 4];
 }
 
@@ -54,22 +54,22 @@ static const MemoryRegionOps ficr_ops = {
 
 static uint64_t uicr_read(void *opaque, hwaddr offset, unsigned int size)
 {
-    NRF51NVMState *s = NRF51_NVM(opaque);
+    NRF52NVMState *s = NRF52_NVM(opaque);
 
 //    info_report(_TYPE_NAME": uicr_read %08llX ", offset);
 
-    assert(offset < NRF51_UICR_SIZE);
+    assert(offset < s->ficr_size);
     return s->uicr_content[offset / 4];
 }
 
 static void uicr_write(void *opaque, hwaddr offset, uint64_t value,
         unsigned int size)
 {
-    NRF51NVMState *s = NRF51_NVM(opaque);
+    NRF52NVMState *s = NRF52_NVM(opaque);
 
-//    info_report(_TYPE_NAME": uicr_write %08llX ", offset);
+//    info_report(_TYPE_NAME": uicr_write %08llX size %u", offset, size);
 
-    assert(offset < NRF51_UICR_SIZE);
+    assert(offset < s->ficr_size);
     s->uicr_content[offset / 4] = value;
 
     memory_region_flush_rom_device(&s->uicr, offset, size);
@@ -86,14 +86,14 @@ static const MemoryRegionOps uicr_ops = {
 
 static uint64_t io_read(void *opaque, hwaddr offset, unsigned int size)
 {
-    NRF51NVMState *s = NRF51_NVM(opaque);
+    NRF52NVMState *s = NRF52_NVM(opaque);
     uint64_t r = 0;
 
     switch (offset) {
-    case NRF51_NVMC_READY:
-        r = NRF51_NVMC_READY_READY;
+    case NRF52_NVMC_READY:
+        r = NRF52_NVMC_READY_READY;
         break;
-    case NRF51_NVMC_CONFIG:
+    case NRF52_NVMC_CONFIG:
         r = s->config;
         break;
     default:
@@ -108,21 +108,21 @@ static uint64_t io_read(void *opaque, hwaddr offset, unsigned int size)
 static void io_write(void *opaque, hwaddr offset, uint64_t value,
         unsigned int size)
 {
-    NRF51NVMState *s = NRF51_NVM(opaque);
+    NRF52NVMState *s = NRF52_NVM(opaque);
 
     switch (offset) {
-    case NRF51_NVMC_CONFIG:
-        s->config = value & NRF51_NVMC_CONFIG_MASK;
+    case NRF52_NVMC_CONFIG:
+        s->config = value & NRF52_NVMC_CONFIG_MASK;
         break;
-    case NRF51_NVMC_ERASEPCR0:
-    case NRF51_NVMC_ERASEPCR1:
-        if (s->config & NRF51_NVMC_CONFIG_EEN) {
+    case NRF52_NVMC_ERASEPCR0:
+    case NRF52_NVMC_ERASEPCR1:
+        if (s->config & NRF52_NVMC_CONFIG_EEN) {
             /* Mask in-page sub address */
-            value &= ~(NRF51_PAGE_SIZE - 1);
-            if (value <= (s->flash_size - NRF51_PAGE_SIZE)) {
-                memset(s->storage + value, 0xFF, NRF51_PAGE_SIZE);
+            value &= ~(NRF52_PAGE_SIZE - 1);
+            if (value <= (s->flash_size - NRF52_PAGE_SIZE)) {
+                memset(s->storage + value, 0xFF, NRF52_PAGE_SIZE);
                 memory_region_flush_rom_device(&s->flash, value,
-                                               NRF51_PAGE_SIZE);
+                                               NRF52_PAGE_SIZE);
             }
         } else {
             qemu_log_mask(LOG_GUEST_ERROR,
@@ -130,21 +130,21 @@ static void io_write(void *opaque, hwaddr offset, uint64_t value,
             __func__, offset);
         }
         break;
-    case NRF51_NVMC_ERASEALL:
-        if (value == NRF51_NVMC_ERASE) {
-            if (s->config & NRF51_NVMC_CONFIG_EEN) {
+    case NRF52_NVMC_ERASEALL:
+        if (value == NRF52_NVMC_ERASE) {
+            if (s->config & NRF52_NVMC_CONFIG_EEN) {
                 memset(s->storage, 0xFF, s->flash_size);
                 memory_region_flush_rom_device(&s->flash, 0, s->flash_size);
-                memset(s->uicr_content, 0xFF, NRF51_UICR_SIZE);
+                memset(s->uicr_content, 0xFF, s->ficr_size);
             } else {
                 qemu_log_mask(LOG_GUEST_ERROR, "%s: Flash not erasable.\n",
                               __func__);
             }
         }
         break;
-    case NRF51_NVMC_ERASEUICR:
-        if (value == NRF51_NVMC_ERASE) {
-            memset(s->uicr_content, 0xFF, NRF51_UICR_SIZE);
+    case NRF52_NVMC_ERASEUICR:
+        if (value == NRF52_NVMC_ERASE) {
+            memset(s->uicr_content, 0xFF, s->ficr_size);
         }
         break;
 
@@ -175,9 +175,9 @@ static uint64_t flash_read(void *opaque, hwaddr offset, unsigned size)
 static void flash_write(void *opaque, hwaddr offset, uint64_t value,
         unsigned int size)
 {
-    NRF51NVMState *s = NRF51_NVM(opaque);
+    NRF52NVMState *s = NRF52_NVM(opaque);
 
-    if (s->config & NRF51_NVMC_CONFIG_WEN) {
+    if (s->config & NRF52_NVMC_CONFIG_WEN) {
         uint32_t oldval;
 
         assert(offset + size <= s->flash_size);
@@ -205,46 +205,46 @@ static const MemoryRegionOps flash_ops = {
     .endianness = DEVICE_LITTLE_ENDIAN,
 };
 
-static void nrf51_nvm_init(Object *obj)
+static void nrf52_nvm_init(Object *obj)
 {
-    NRF51NVMState *s = NRF51_NVM(obj);
+    NRF52NVMState *s = NRF52_NVM(obj);
     SysBusDevice *sbd = SYS_BUS_DEVICE(obj);
     Error *err = NULL;
 
-//    info_report(_TYPE_NAME": nrf51_nvm_init");
+//    info_report(_TYPE_NAME": nrf52_nvm_init");
 
-    memory_region_init_io(&s->mmio, obj, &io_ops, s, "nrf51_soc.nvmc",
-                          NRF51_NVMC_SIZE);
+    memory_region_init_io(&s->mmio, obj, &io_ops, s, "nrf52_soc.nvmc",
+                          NRF52_NVMC_SIZE);
     sysbus_init_mmio(sbd, &s->mmio);
 
     // FICR
     memory_region_init_rom_device(&s->ficr, obj, &ficr_ops, s,
-                                  "nrf51_soc.ficr", NRF51_FICR_SIZE, &err);
+                                  "nrf52_soc.ficr", s->ficr_size, &err);
     sysbus_init_mmio(sbd, &s->ficr);
     s->ficr_content = memory_region_get_ram_ptr(&s->ficr);
 
     // UICR
     memory_region_init_rom_device(&s->uicr, obj, &uicr_ops, s,
-                                  "nrf51_soc.uicr", NRF51_UICR_SIZE, &err);
+                                  "nrf52_soc.uicr", s->uicr_size, &err);
     sysbus_init_mmio(sbd, &s->uicr);
     s->uicr_content = memory_region_get_ram_ptr(&s->uicr);
 
     // Flash
     memory_region_init_rom_device(&s->flash, obj, &flash_ops, s,
-                                  "nrf51_soc.flash", s->flash_size, &err);
+                                  "nrf52_soc.flash", s->flash_size, &err);
     s->storage = memory_region_get_ram_ptr(&s->flash);
     sysbus_init_mmio(sbd, &s->flash);
 
     s->storage = memory_region_get_ram_ptr(&s->flash);
 }
 
-static void nrf51_nvm_realize(DeviceState *dev, Error **errp)
+static void nrf52_nvm_realize(DeviceState *dev, Error **errp)
 {
-    NRF51NVMState *s = NRF51_NVM(dev);
+    NRF52NVMState *s = NRF52_NVM(dev);
 
-//    info_report(_TYPE_NAME": nrf51_nvm_realize");
+//    info_report(_TYPE_NAME": nrf52_nvm_realize");
 
-    memset(s->uicr_content, 0xFF, NRF51_UICR_SIZE);
+    memset(s->uicr_content, 0xFF, s->ficr_size);
 
     /*
      * UICR Registers Assignments
@@ -358,7 +358,7 @@ static void nrf51_nvm_realize(DeviceState *dev, Error **errp)
      * BLE_1MBIT[3]      0x0F8
      * BLE_1MBIT[4]      0x0FC
      */
-    const uint32_t _ficr_content[NRF51_FICR_FIXTURE_SIZE] = {
+    const uint32_t _ficr_content[NRF52_FICR_FIXTURE_SIZE] = {
             0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0x00000400,
             0x00000100, 0xFFFFFFFF, 0xFFFFFFFF, 0x00000002, 0x00002000,
             0x00002000, 0x00002000, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF,
@@ -374,54 +374,56 @@ static void nrf51_nvm_realize(DeviceState *dev, Error **errp)
             0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF
     };
 
-    memcpy(s->ficr_content, _ficr_content, NRF51_FICR_SIZE);
+    memcpy(s->ficr_content, _ficr_content, NRF52_FICR_SIZE);
 }
 
-static void nrf51_nvm_reset(DeviceState *dev)
+static void nrf52_nvm_reset(DeviceState *dev)
 {
-    NRF51NVMState *s = NRF51_NVM(dev);
+    NRF52NVMState *s = NRF52_NVM(dev);
 
-//    info_report(_TYPE_NAME": nrf51_nvm_reset");
+//    info_report(_TYPE_NAME": nrf52_nvm_reset");
 
     s->config = 0x00;
 }
 
-static Property nrf51_nvm_properties[] = {
-    DEFINE_PROP_UINT32("flash-size", NRF51NVMState, flash_size, 0x40000),
+static Property nrf52_nvm_properties[] = {
+    DEFINE_PROP_UINT32("flash-size", NRF52NVMState, flash_size, 0x40000),
+    DEFINE_PROP_UINT32("ficr-size", NRF52NVMState, ficr_size, NRF52_FICR_SIZE),
+    DEFINE_PROP_UINT32("uicr-size", NRF52NVMState, uicr_size, NRF52_UICR_SIZE),
     DEFINE_PROP_END_OF_LIST(),
 };
 
 static const VMStateDescription vmstate_nvm = {
-    .name = "nrf51_soc.nvm",
+    .name = "nrf52_soc.nvm",
     .version_id = 1,
     .minimum_version_id = 1,
     .fields = (VMStateField[]) {
-        VMSTATE_UINT32(config, NRF51NVMState),
+        VMSTATE_UINT32(config, NRF52NVMState),
         VMSTATE_END_OF_LIST()
     }
 };
 
-static void nrf51_nvm_class_init(ObjectClass *klass, void *data)
+static void nrf52_nvm_class_init(ObjectClass *klass, void *data)
 {
     DeviceClass *dc = DEVICE_CLASS(klass);
 
-    device_class_set_props(dc, nrf51_nvm_properties);
+    device_class_set_props(dc, nrf52_nvm_properties);
     dc->vmsd = &vmstate_nvm;
-    dc->realize = nrf51_nvm_realize;
-    dc->reset = nrf51_nvm_reset;
+    dc->realize = nrf52_nvm_realize;
+    dc->reset = nrf52_nvm_reset;
 }
 
-static const TypeInfo nrf51_nvm_info = {
-    .name = TYPE_NRF51_NVM,
+static const TypeInfo nrf52_nvm_info = {
+    .name = TYPE_NRF52_NVM,
     .parent = TYPE_SYS_BUS_DEVICE,
-    .instance_size = sizeof(NRF51NVMState),
-    .instance_init = nrf51_nvm_init,
-    .class_init = nrf51_nvm_class_init
+    .instance_size = sizeof(NRF52NVMState),
+    .instance_init = nrf52_nvm_init,
+    .class_init = nrf52_nvm_class_init
 };
 
-static void nrf51_nvm_register_types(void)
+static void nrf52_nvm_register_types(void)
 {
-    type_register_static(&nrf51_nvm_info);
+    type_register_static(&nrf52_nvm_info);
 }
 
-type_init(nrf51_nvm_register_types)
+type_init(nrf52_nvm_register_types)
