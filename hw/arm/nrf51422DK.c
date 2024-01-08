@@ -19,9 +19,6 @@ struct nrf51422DKMachineState {
     NRF51422State nrf51422;
 };
 
-/* Main SYSCLK frequency in Hz */
-#define SYSCLK_FRQ 16000000ULL
-
 #define TYPE_NRF51422DK_MACHINE MACHINE_TYPE_NAME("nrf51422DK")
 
 OBJECT_DECLARE_SIMPLE_TYPE(nrf51422DKMachineState, NRF51422DK_MACHINE)
@@ -34,7 +31,7 @@ static void nrf51422DK_init(MachineState *machine)
 
     /* This clock doesn't need migration because it is fixed-frequency */
     sysclk = clock_new(OBJECT(machine), "SYSCLK");
-    clock_set_hz(sysclk, SYSCLK_FRQ);
+    clock_set_hz(sysclk, 16000000ULL); /* Main SYSCLK frequency in Hz */
 
     object_initialize_child(OBJECT(machine), "nrf51422", &s->nrf51422,
                             TYPE_NRF51422_SOC);

@@ -92,9 +92,6 @@ static const uint32_t timer__addr[NRF51422_NUM_TIMERS] = {
 
 #define BASE_TO_IRQ(base)       ((base >> 12) & 0x3F)
 
-/* HCLK (the main CPU clock) on this SoC is always 16MHz */
-#define HCLK_FRQ 16000000
-
 static uint64_t _dwt_read(void *opaque,
                  hwaddr addr,
                  unsigned size) {
@@ -254,8 +251,10 @@ static void nrf51422_soc_realize(DeviceState *dev_soc, Error **errp)
         error_setg(errp, "sysclk clock must be wired up by the board code");
         return;
     }
-    /* This clock doesn't need migration because it is fixed-frequency */
-    clock_set_hz(s->sysclk, HCLK_FRQ);
+
+    clock_set_mul_div(s->refclk, 1, 1);
+    clock_set_source(s->refclk, s->sysclk);
+
     qdev_connect_clock_in(DEVICE(&s->armv7m), "cpuclk", s->sysclk);
     qdev_connect_clock_in(DEVICE(&s->armv7m), "refclk", s->refclk);
 
@@ -439,24 +438,6 @@ static void nrf51422_soc_realize(DeviceState *dev_soc, Error **errp)
     create_unimplemented_device("nrf51422_soc.uicr",
                                 NRF51422_UICR_BASE, NRF51422_UICR_SIZE);
 
-    /*
-     * We use s->refclk internally and only define it with qdev_init_clock_in()
-     * so it is correctly parented and not leaked on an init/deinit; it is not
-     * intended as an externally exposed clock.
-     */
-    if (clock_has_source(s->refclk)) {
-        error_setg(errp, "refclk clock must not be wired up by the board code");
-        return;
-    }
-
-    if (!clock_has_source(s->sysclk)) {
-        error_setg(errp, "sysclk clock must be wired up by the board code");
-        return;
-    }
-
-    /* The refclk always runs at frequency HCLK / 2 */
-    clock_set_mul_div(s->refclk, 2, 1);
-    clock_set_source(s->refclk, s->sysclk);
 }
 
 static void nrf51422_soc_init(Object *obj)
