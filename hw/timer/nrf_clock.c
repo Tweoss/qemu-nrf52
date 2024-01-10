@@ -98,6 +98,12 @@ static void nrf52_clock_write(void *opaque, hwaddr addr,
 
     switch (addr) {
 
+        case A_CLOCK_TASKS_LFCLKSTOP:
+            s->regs[R_CLOCK_LFCLKRUN] = 0;
+            s->regs[R_CLOCK_LFCLKSTAT] &= ~(1 << R_CLOCK_LFCLKSTAT_STATE_SHIFT);
+            info_report(_TYPE_NAME": A_CLOCK_TASKS_LFCLKSTOP");
+            break;
+
         case A_CLOCK_TASKS_LFCLKSTART:
             s->regs[R_CLOCK_LFCLKRUN] = 1;
             s->regs[R_CLOCK_EVENTS_LFCLKSTARTED] = 1;
@@ -105,6 +111,12 @@ static void nrf52_clock_write(void *opaque, hwaddr addr,
             PPI_EVENT_R(s, R_CLOCK_EVENTS_LFCLKSTARTED);
             s->regs[R_CLOCK_LFCLKSTAT] |= (1 << R_CLOCK_LFCLKSTAT_STATE_SHIFT) | (1 << R_CLOCK_LFCLKSTAT_SRC_SHIFT); //xtal
             info_report(_TYPE_NAME": A_CLOCK_TASKS_LFCLKSTART");
+            break;
+
+        case A_CLOCK_TASKS_HFCLKSTOP:
+            s->regs[R_CLOCK_HFCLKRUN] = 1;
+            s->regs[R_CLOCK_LFCLKSTAT] &= ~(1 << R_CLOCK_HFCLKSTAT_STATE_SHIFT);
+            info_report(_TYPE_NAME": A_CLOCK_TASKS_HFCLKSTOP");
             break;
 
         case A_CLOCK_TASKS_HFCLKSTART:
