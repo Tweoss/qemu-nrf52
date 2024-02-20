@@ -108,6 +108,7 @@ ExternalProject_Add(qemu-nrf52
         BUILD_COMMAND cmd.exe /c set MSYSTEM=MINGW64 && ${MINGW_PREFIX}/usr/bin/bash --login -c "export PATH=${MINGW_PATH} && cd <SOURCE_DIR> && make -j4 -k"
         BUILD_IN_SOURCE TRUE
         USES_TERMINAL_BUILD TRUE
+        BUILD_ALWAYS    TRUE
         UPDATE_COMMAND    ""
         INSTALL_COMMAND   ""
         )

@@ -216,6 +216,8 @@ static void lis12_reset(struct lis12_state *s)
 {
     s->pointer = 0;
 
+    s->uses_int1 = false;
+
     if (s->ptimer) {
         ptimer_transaction_begin(s->ptimer);
         ptimer_stop(s->ptimer);
@@ -231,6 +233,8 @@ static void lis12_reset(struct lis12_state *s)
 
     s->regs[R_LIS2DW12_OUT_Z_L] = (uint8_t)((uint16_t)acc_z & 0xFF);
     s->regs[R_LIS2DW12_OUT_Z_H] = (uint8_t)(((uint16_t)acc_z & 0xFF00) >> 8u);
+
+    qemu_set_irq(s->int1[0], false);
 
     info_report(TYPE_LSM6DW12": Device reset");
 }

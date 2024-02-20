@@ -71,6 +71,7 @@ struct BMP3State {
     ptimer_state *ptimer;
 
     bool uses_int1;
+    bool int_level;
     qemu_irq int1[1];
 
     z_model_state *p_model;
@@ -121,6 +122,12 @@ REG8( BMP3_REG_CMD,                            UINT8_C(0x7E))
 #define BMP3_DRDY_PRESS                         UINT8_C(0x20)
 #define BMP3_DRDY_TEMP                          UINT8_C(0x40)
 
+#define BMP3_INT_LEVEL                          UINT8_C(0x02)
+#define BMP3_INT_DRDY_EN                        UINT8_C(0x40)
+
+#define BMP3_INT_PIN_ACTIVE_HIGH                UINT8_C(0x01)
+#define BMP3_INT_PIN_ACTIVE_LOW                 UINT8_C(0x00)
+
 /**\name Power mode macros */
 #define BMP3_MODE_SLEEP_VAL                         UINT8_C(0x00)
 #define BMP3_MODE_FORCED_VAL                        UINT8_C(0x01)
@@ -150,9 +157,9 @@ static void timer_hit(void *opaque)
     if (s->uses_int1 &&
         (s->regs[R_BMP3_REG_SENS_STATUS] & BMP3_DRDY_PRESS)) {
 
-        qemu_set_irq(s->int1[0], true);
+        qemu_set_irq(s->int1[0], s->int_level);
     } else {
-        qemu_set_irq(s->int1[0], false);
+        qemu_set_irq(s->int1[0], !s->int_level);
     }
 
 }
@@ -162,7 +169,7 @@ static void _data_read_clear(BMP3State *s) {
     s->regs[R_BMP3_REG_SENS_STATUS] &= ~(BMP3_DRDY_PRESS);
     s->regs[R_BMP3_REG_SENS_STATUS] &= ~(BMP3_DRDY_TEMP);
 
-    qemu_set_irq(s->int1[0], false);
+    qemu_set_irq(s->int1[0], !s->int_level);
 
     s->pending_clear = false;
 }
@@ -193,12 +200,19 @@ static void bmp3_write(BMP3State *s, uint8_t data)
                 break;
 
             case A_BMP3_REG_INT_CTRL:
-                if (data & BMP3_DRDY_TEMP) {
+                // info_report(TYPE_BMP3": REG_INT_CTRL 0x%02X", data);
+                if (data & BMP3_INT_LEVEL) {
+                    s->int_level = BMP3_INT_PIN_ACTIVE_HIGH;
+                } else {
+                    s->int_level = BMP3_INT_PIN_ACTIVE_LOW;
+                }
+                qemu_set_irq(s->int1[0], !s->int_level);
+                if (data & BMP3_INT_DRDY_EN) {
                     s->uses_int1 = true;
                     info_report(TYPE_BMP3": INT enabled !");
                     ptimer_transaction_begin(s->ptimer);
                     ptimer_stop(s->ptimer);
-                    ptimer_set_freq(s->ptimer, 10);
+                    ptimer_set_freq(s->ptimer, 2);
                     ptimer_set_count(s->ptimer, 1);
                     ptimer_set_limit(s->ptimer, 1, 1);
                     ptimer_run(s->ptimer, 0);
@@ -266,6 +280,11 @@ static void bmp3_read_events_process(BMP3State *s)
 
         case A_BMP3_REG_DATA:
             s->pending_clear = true;
+            if (s->uses_int1) {
+                qemu_set_irq(s->int1[0], s->int_level);
+            } else {
+                qemu_set_irq(s->int1[0], !s->int_level);
+            }
             break;
 
         default:
