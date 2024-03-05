@@ -438,6 +438,7 @@ static void nrf52832_soc_realize(DeviceState *dev_soc, Error **errp)
         return;
     }
     sysbus_mmio_map(SYS_BUS_DEVICE(&s->ppi), 0, NRF52832_PPI_BASE);
+    /* No IRQ */
 
     /* CLOCK */
     object_property_set_link(OBJECT(&s->clock), "downstream", OBJECT(&s->container),
@@ -446,6 +447,9 @@ static void nrf52832_soc_realize(DeviceState *dev_soc, Error **errp)
         return;
     }
     sysbus_mmio_map(SYS_BUS_DEVICE(&s->clock), 0, NRF52832_CLOCK_BASE);
+    sysbus_connect_irq(SYS_BUS_DEVICE(&s->clock), 0,
+                       qdev_get_gpio_in(DEVICE(&s->armv7m),
+                                        BASE_TO_IRQ(NRF52832_CLOCK_BASE)));
 
     /* Radio */
     object_property_set_link(OBJECT(&s->radio), "downstream", OBJECT(&s->container),
@@ -454,6 +458,10 @@ static void nrf52832_soc_realize(DeviceState *dev_soc, Error **errp)
         return;
     }
     sysbus_mmio_map(SYS_BUS_DEVICE(&s->radio), 0, NRF52832_RADIO_BASE);
+    sysbus_connect_irq(SYS_BUS_DEVICE(&s->radio), 0,
+                       qdev_get_gpio_in(DEVICE(&s->armv7m),
+                                        BASE_TO_IRQ(NRF52832_RADIO_BASE)));
+
     /* SAADC */
     object_property_set_link(OBJECT(&s->saadc), "downstream", OBJECT(&s->container),
                              &error_fatal);
