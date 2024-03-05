@@ -43,8 +43,6 @@ struct NRF5PPIState {
 
     MemoryRegion iomem;
 
-//    qemu_irq irq;
-
     uint8_t id;
 
     QEMUTimer tick;

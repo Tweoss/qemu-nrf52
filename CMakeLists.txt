@@ -49,6 +49,7 @@ include_directories(${CMAKE_CURRENT_SOURCE_DIR}/target/arm)
 include_directories(${header_dir_list})
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/hw)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/hw/arm/)
+include_directories(${CMAKE_CURRENT_SOURCE_DIR}/hw/adc)
 
 include_directories(${MINGW_PREFIX}/mingw64/include)
 
@@ -68,6 +69,7 @@ add_definitions(-DCONFIG_TARGET=\"arm-softmmu-config-target.h\")
 add_definitions(-DCONFIG_DEVICES=\"arm-softmmu-config-devices.h\")
 
 add_library(${PROJECT_NAME}
+        ${CMAKE_CURRENT_SOURCE_DIR}/hw/adc/nrf52_saadc.c
         ${CMAKE_CURRENT_SOURCE_DIR}/hw/dma/nrf52_edma.c
         ${CMAKE_CURRENT_SOURCE_DIR}/hw/dma/nrf5x_ppi.c
         ${CMAKE_CURRENT_SOURCE_DIR}/hw/dma/nrf5x_radio.c

@@ -7,6 +7,7 @@
 
 #include "hw/sysbus.h"
 #include "hw/arm/armv7m.h"
+#include "hw/adc/nrf52_saadc.h"
 #include "hw/char/nrf51_uart.h"
 #include "hw/misc/nrf51_rng.h"
 #include "hw/gpio/nrf51_gpio.h"
@@ -74,6 +75,8 @@ struct NRF52832State {
     NRF5RtcState rtc2;
 
     NRF5PPIState ppi;
+
+    NRF52SAADCState saadc;
 
     Clock *sysclk;
     Clock *refclk;

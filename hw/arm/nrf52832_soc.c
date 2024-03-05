@@ -454,6 +454,16 @@ static void nrf52832_soc_realize(DeviceState *dev_soc, Error **errp)
         return;
     }
     sysbus_mmio_map(SYS_BUS_DEVICE(&s->radio), 0, NRF52832_RADIO_BASE);
+    /* SAADC */
+    object_property_set_link(OBJECT(&s->saadc), "downstream", OBJECT(&s->container),
+                             &error_fatal);
+    if (!sysbus_realize(SYS_BUS_DEVICE(&s->saadc), errp)) {
+        return;
+    }
+    sysbus_mmio_map(SYS_BUS_DEVICE(&s->saadc), 0, NRF52832_SAADC_BASE);
+    sysbus_connect_irq(SYS_BUS_DEVICE(&s->saadc), 0,
+                       qdev_get_gpio_in(DEVICE(&s->armv7m),
+                                        BASE_TO_IRQ(NRF52832_SAADC_BASE)));
 
     // Debug output
     memory_region_init_io(&s->rtt, NULL, &rtt_ops, s, "nrf52832_soc.rtt", 0x100);
@@ -471,8 +481,6 @@ static void nrf52832_soc_realize(DeviceState *dev_soc, Error **errp)
 
     /* STUB Peripherals */
 
-    create_unimplemented_device("nrf52832_soc.saadc",
-                                NRF52832_SAADC_BASE, NRF52832_PERIPHERAL_SIZE);
     create_unimplemented_device("nrf52832_soc.wdt",
                                 NRF52832_WDT_BASE, NRF52832_PERIPHERAL_SIZE);
 
@@ -529,6 +537,8 @@ static void nrf52832_soc_init(Object *obj)
     object_initialize_child(obj, "ppi", &s->ppi, TYPE_NRF_PPI);
 
     object_initialize_child(obj, "radio", &s->radio, TYPE_NRF_RADIO);
+
+    object_initialize_child(obj, "saadc", &s->saadc, TYPE_NRF52_SAADC);
 
     object_property_add_alias(obj, "serial0", OBJECT(s), "rtt_chardev");
 
