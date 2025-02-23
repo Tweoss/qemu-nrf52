@@ -29,6 +29,7 @@
 import os
 import sys
 import sphinx
+from setuptools import distutils
 from distutils.version import LooseVersion
 from sphinx.errors import ConfigError
 

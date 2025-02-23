@@ -30,6 +30,36 @@
 #include "trace/trace-target_arm_hvf.h"
 #include "migration/vmstate.h"
 
+
+
+// #include "qemu/osdep.h"
+// #include "qemu/error-report.h"
+// #include "qemu/log.h"
+
+// #include "system/runstate.h"
+// #include "system/hvf.h"
+// #include "system/hvf_int.h"
+// #include "system/hw_accel.h"
+// #include "hvf_arm.h"
+#include "cpregs.h"
+
+// #include <mach/mach_time.h>
+
+// #include "exec/address-spaces.h"
+// #include "hw/boards.h"
+// #include "hw/irq.h"
+// #include "qemu/main-loop.h"
+// #include "system/cpus.h"
+// #include "arm-powerctl.h"
+// #include "target/arm/cpu.h"
+// #include "target/arm/internals.h"
+// #include "target/arm/multiprocessing.h"
+// #include "target/arm/gtimer.h"
+#include "trace.h"
+// #include "migration/vmstate.h"
+
+// #include "gdbstub/enums.h"
+
 #define HVF_SYSREG(crn, crm, op0, op1, op2) \
         ENCODE_AA64_CP_REG(CP_REG_ARM64_SYSREG_CP, crn, crm, op0, op1, op2)
 #define PL1_WRITE_MASK 0x4
